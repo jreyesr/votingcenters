@@ -28,11 +28,14 @@
 
     import corrections from './data/corrections.json' with {type: "json"}
 
-    const rawElectionData: FeatureCollection = $derived((await import(/* @vite-ignore */ "./data/" + chosenElection + ".json", {type: "json"})).default)
+    // NOTE the import(...) below MUST use backticks `path/${filename}.json`, NOT "path/" + filename + ".json" or other forms of creating the import path
+    // Vite does some kind of analysis of backtick dynamic imports and rewrites them to an object lookup taking into account all the files that exist in that directory
+    // See https://vite.dev/guide/assets#new-url-url-import-meta-url especially the "How it works" accordion in that section
+    const rawElectionData: FeatureCollection = $derived((await import(`./data/${chosenElection}.json`)).default)
     const chosenElectionData = $derived.by(() => {
         rawElectionData.features.forEach(f => {
             if (f.properties!["CODIGO RECINTO"].toString() in corrections)
-                f.geometry!.coordinates = corrections[f.properties!["CODIGO RECINTO"]]
+                (f.geometry as Point).coordinates = corrections[f.properties!["CODIGO RECINTO"]]
         })
         return rawElectionData
     })
@@ -195,7 +198,6 @@
                     <p>{props["NUM JUNR"]} JRVs, {props["JUN FEM"]}F ({props["JUN INIF"]}F-{props["JUN FINF"]}F)
                         + {props["JUN MAS"]}M ({props["JUN INIM"]}M-{props["JUN FINM"]}M)</p>
                     {#if props["NUMERO ELECTORES"]}<p>Atiende <b>{props["NUMERO ELECTORES"]} votantes</b></p>{/if}
-                    {JSON.stringify(data!.geometry)}
                 {/snippet}
             </Popup>
         </CircleLayer>
