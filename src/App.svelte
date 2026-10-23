@@ -28,6 +28,7 @@
     let chosenElection = $state("2027_alcaldes")
 
     import corrections from './data/corrections.json' with {type: "json"}
+    import type {ExpressionFilterSpecification} from "maplibre-gl";
 
     // NOTE the import(...) below MUST use backticks `path/${filename}.json`, NOT "path/" + filename + ".json" or other forms of creating the import path
     // Vite does some kind of analysis of backtick dynamic imports and rewrites them to an object lookup taking into account all the files that exist in that directory
@@ -95,7 +96,7 @@
     let map = $state<maplibregl.Map>()
     let hoveredZone: Feature | undefined = $state();
     const hoveredZoneId = $derived(hoveredZone?.properties?.["ID ZONA"].toString())
-    const hoveredZoneCentersFilter = $derived(hoveredZoneId ? ["==", ["to-string", ["get", "ID ZONA"]], hoveredZoneId] : false)
+    const hoveredZoneCentersFilter: ExpressionFilterSpecification = $derived(hoveredZoneId ? ["==", ["to-string", ["get", "ID ZONA"]], hoveredZoneId] : false)
     const hoveredZoneInfo = $derived(hoveredZoneId ? zonesInfo[hoveredZoneId] : undefined)
 
     let focusedCenter = $state<Feature>()
@@ -205,6 +206,18 @@
         }}/>
     </GeoJSON>
 
+    <!-- line joining the center with its popup open to the user's current geolocation -->
+    <GeoJSON data={lineBetweenUserAndCenter}>
+        <LineLayer
+                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                paint={{
+                    'line-width': 4,
+                    'line-color': '#008800',
+                    'line-opacity': 1,
+                }}/>
+    </GeoJSON>
+
+
     <GeoJSON data={chosenElectionData as GeoJSONType} promoteId="CODIGO RECINTO">
         <CircleLayer paint={{
             'circle-color': [
@@ -248,7 +261,7 @@
                     <button onclick={() => {
                         focusedCenter = data
                         geolocateControl?.trigger()
-                    }}>Voto aquí
+                    }} class="flat">Voto aquí
                     </button>
                     {#if distanceBetweenUserAndCenterDisplay !== undefined}
                         {distanceBetweenUserAndCenterDisplay} desde tu ubicación
@@ -256,16 +269,6 @@
                 {/snippet}
             </Popup>
         </CircleLayer>
-    </GeoJSON>
-
-    <GeoJSON data={lineBetweenUserAndCenter}>
-        <LineLayer
-                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-                paint={{
-                    'line-width': 4,
-                    'line-color': '#008800',
-                    'line-opacity': 1,
-                }}/>
     </GeoJSON>
 </MapLibre>
 
@@ -284,6 +287,17 @@
         padding: 2em;
         text-align: center;
         /*background-color: */
+    }
+
+    button.flat {
+        border: unset;
+        border: 1px solid dodgerblue;
+        color: dodgerblue;
+        padding: 2px 6px;
+        cursor: pointer;
+        font-size: 1.2em;
+        border-radius: 4px;
+        background-color: unset;
     }
 
     :global(.maplibregl-popup.narrow) {
