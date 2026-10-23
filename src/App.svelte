@@ -22,6 +22,7 @@
 
     import {convex} from "@turf/convex";
     import {buffer} from "@turf/buffer";
+    import {distance} from "@turf/distance";
     import {featureCollection, lineString} from "@turf/helpers";
 
     let chosenElection = $state("2027_alcaldes")
@@ -96,6 +97,47 @@
     const hoveredZoneId = $derived(hoveredZone?.properties?.["ID ZONA"].toString())
     const hoveredZoneCentersFilter = $derived(hoveredZoneId ? ["==", ["to-string", ["get", "ID ZONA"]], hoveredZoneId] : false)
     const hoveredZoneInfo = $derived(hoveredZoneId ? zonesInfo[hoveredZoneId] : undefined)
+
+    let focusedCenter = $state<Feature>()
+
+    let geolocateControl = $state<maplibregl.GeolocateControl>()
+    let currentUserPosition = $state<GeolocationCoordinates>()
+    $effect(() => {
+        if (!geolocateControl) return;
+
+        geolocateControl.on("geolocate", (e) => {
+            currentUserPosition = e.coords
+        })
+
+        // HACKITY HACKITY disable the internal _updateCamera function which is called on location updates
+        // See https://stackoverflow.com/a/79790651
+        geolocateControl._updateCamera = function (position) {
+            if (!map) return;
+            // ensure that the map contains ALL that it previously contained, and also the user's current pos
+            // i.e. it'll never zoom in because it'd no longer display all that it previously did, it'll at most zoom out
+            // if necessary (if the user's pos is outside the screen) until that pos is shown
+            const x1 = map.getBounds().getWest(), x2 = map.getBounds().getEast(),
+                y1 = map.getBounds().getSouth(), y2 = map.getBounds().getNorth();
+            const px = position.coords.longitude, py = position.coords.latitude;
+            map.fitBounds([
+                [Math.min(x1, px), Math.min(y1, py)],
+                [Math.max(px, x2), Math.max(py, y2)]
+            ], {padding: 20})
+        }
+    })
+
+    const lineBetweenUserAndCenter = $derived(focusedCenter && currentUserPosition
+        ? lineString([
+            (focusedCenter.geometry as Point).coordinates,
+            [currentUserPosition.longitude, currentUserPosition.latitude]
+        ])
+        : [])
+    const distanceBetweenUserAndCenter = $derived(focusedCenter && currentUserPosition
+        ? distance([currentUserPosition.longitude, currentUserPosition.latitude], (focusedCenter.geometry as Point).coordinates)
+        : undefined)
+    const distanceBetweenUserAndCenterDisplay = $derived(distanceBetweenUserAndCenter
+        ? (distanceBetweenUserAndCenter < 1 ? `${(distanceBetweenUserAndCenter * 1000).toFixed()} m` : `${distanceBetweenUserAndCenter.toFixed(1)} km`)
+        : undefined)
 </script>
 
 <h1>Recintos electorales a través de la historia</h1>
@@ -134,7 +176,7 @@
         }}
 >
     <NavigationControl showCompass={false}/>
-    <GeolocateControl showAccuracyCircle={true}/>
+    <GeolocateControl showAccuracyCircle={true} bind:control={geolocateControl}/>
     <FullscreenControl/>
     <ScaleControl/>
 
@@ -145,12 +187,12 @@
             'fill-color': 'red',
             'fill-opacity': hoverStateFilter(0, 0.3),
         }} manageHoverState bind:hovered={hoveredZone}>
-            <Popup openOn="hover">
+            <Popup openOn="hover" closeButton closeOnMove>
                 {#snippet children({data}: { data?: Feature })}
                     {@const props = zonesInfo[data!.properties!["ID ZONA"]]}
                     <p><b>Zona: {props.zone ?? "(zona sin nombre)"}</b></p>
 
-                    <p>{props.province} > {props.canton} > {props.parish}</p>
+                    <p>Prov: {props.province} > Cant: {props.canton} > Parr: {props.parish}</p>
                     <p>{props.numCenters} centros, {props.numStations} JRVs</p>
                     {#if !isNaN(props.numVoters)}<p>Atiende <b>{props.numVoters} votantes</b></p>{/if}
                 {/snippet}
@@ -190,19 +232,40 @@
                 12, 0,
                 13, 1.5,
             ],
-        }}>
-            <Popup openOn="hover">
+        }}
+                     hoverCursor="context-menu">
+            <Popup openOn="click" closeButton popupClass="narrow" onclose={() => focusedCenter = undefined}>
                 {#snippet children({data}: { data: Feature })}
                     {@const props = data!.properties!}
                     <p>[{props["CODIGO RECINTO"]}] <b>Recinto: {props["NOMBRE RECINTO"]}</b></p>
 
-                    <p>{props["PROVINCIA"]} > {props["CANTON"]} > {props["PARROQUIA"]} > {props["ZONA"]}</p>
+                    <p>Prov: {props["PROVINCIA"]} > Cant: {props["CANTON"]} > Parr: {props["PARROQUIA"]} >
+                        Zona: {props["ZONA"] || "(sin nombre)"}</p>
                     <p>{props["NUM JUNR"]} JRVs, {props["JUN FEM"]}F ({props["JUN INIF"]}F-{props["JUN FINF"]}F)
                         + {props["JUN MAS"]}M ({props["JUN INIM"]}M-{props["JUN FINM"]}M)</p>
                     {#if props["NUMERO ELECTORES"]}<p>Atiende <b>{props["NUMERO ELECTORES"]} votantes</b></p>{/if}
+
+                    <button onclick={() => {
+                        focusedCenter = data
+                        geolocateControl?.trigger()
+                    }}>Voto aquí
+                    </button>
+                    {#if distanceBetweenUserAndCenterDisplay !== undefined}
+                        {distanceBetweenUserAndCenterDisplay} desde tu ubicación
+                    {/if}
                 {/snippet}
             </Popup>
         </CircleLayer>
+    </GeoJSON>
+
+    <GeoJSON data={lineBetweenUserAndCenter}>
+        <LineLayer
+                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                paint={{
+                    'line-width': 4,
+                    'line-color': '#008800',
+                    'line-opacity': 1,
+                }}/>
     </GeoJSON>
 </MapLibre>
 
@@ -221,5 +284,9 @@
         padding: 2em;
         text-align: center;
         /*background-color: */
+    }
+
+    :global(.maplibregl-popup.narrow) {
+        max-width: 300px;
     }
 </style>
