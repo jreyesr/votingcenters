@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@turf/buffer": "^7.4.0",
+    "@turf/center-of-mass": "^7.4.0",
     "@turf/clusters": "^7.4.0",
     "@turf/convex": "^7.4.0",
     "@turf/distance": "^7.4.0",

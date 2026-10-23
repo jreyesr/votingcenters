@@ -6,7 +6,7 @@
 </script>
 
 <script lang="ts">
-    import type {GeoJSON as GeoJSONType, Feature, FeatureCollection, Point} from 'geojson';
+    import type {GeoJSON as GeoJSONType, Feature, FeatureCollection, Point, Polygon} from 'geojson';
     import {
         MapLibre,
         NavigationControl, GeolocateControl, FullscreenControl, ScaleControl,
@@ -23,6 +23,7 @@
     import {convex} from "@turf/convex";
     import {buffer} from "@turf/buffer";
     import {distance} from "@turf/distance";
+    import {centerOfMass} from "@turf/center-of-mass";
     import {featureCollection, lineString} from "@turf/helpers";
 
     let chosenElection = $state("2027_alcaldes")
@@ -99,7 +100,8 @@
     const hoveredZoneCentersFilter: ExpressionFilterSpecification = $derived(hoveredZoneId ? ["==", ["to-string", ["get", "ID ZONA"]], hoveredZoneId] : false)
     const hoveredZoneInfo = $derived(hoveredZoneId ? zonesInfo[hoveredZoneId] : undefined)
 
-    let focusedCenter = $state<Feature>()
+    let focusedCenter = $state<Feature<Point>>()
+    let focusedZone = $state<Feature<Polygon>>()
 
     let geolocateControl = $state<maplibregl.GeolocateControl>()
     let currentUserPosition = $state<GeolocationCoordinates>()
@@ -139,6 +141,8 @@
     const distanceBetweenUserAndCenterDisplay = $derived(distanceBetweenUserAndCenter
         ? (distanceBetweenUserAndCenter < 1 ? `${(distanceBetweenUserAndCenter * 1000).toFixed()} m` : `${distanceBetweenUserAndCenter.toFixed(1)} km`)
         : undefined)
+
+    const centerOfFocusedZone = $derived(focusedZone ? centerOfMass(focusedZone).geometry : undefined)
 </script>
 
 <h1>Recintos electorales a través de la historia</h1>
@@ -183,22 +187,34 @@
 
     <BasemapSwitcherControl/>
 
-    <GeoJSON data={zonesCollection} promoteId="ID ZONA">
-        <FillLayer paint={{
-            'fill-color': 'red',
-            'fill-opacity': hoverStateFilter(0, 0.3),
-        }} manageHoverState bind:hovered={hoveredZone}>
-            <Popup openOn="hover" closeButton closeOnMove>
-                {#snippet children({data}: { data?: Feature })}
-                    {@const props = zonesInfo[data!.properties!["ID ZONA"]]}
-                    <p><b>Zona: {props.zone ?? "(zona sin nombre)"}</b></p>
+    {#if focusedZone}
+        <Popup open
+               closeButton closeOnMove onclose={() => focusedZone = undefined}
+               lngLat={centerOfFocusedZone!.coordinates}>
+            {@const props = zonesInfo[focusedZone.properties!["ID ZONA"]]}
+            <p><b>Zona: {props.zone ?? "(zona sin nombre)"}</b></p>
 
-                    <p>Prov: {props.province} > Cant: {props.canton} > Parr: {props.parish}</p>
-                    <p>{props.numCenters} centros, {props.numStations} JRVs</p>
-                    {#if !isNaN(props.numVoters)}<p>Atiende <b>{props.numVoters} votantes</b></p>{/if}
-                {/snippet}
-            </Popup>
-        </FillLayer>
+            <p>Prov: {props.province} > Cant: {props.canton} > Parr: {props.parish}</p>
+            <p>{props.numCenters} centros, {props.numStations} JRVs</p>
+            {#if !isNaN(props.numVoters)}<p>Atiende <b>{props.numVoters} votantes</b></p>{/if}
+
+            <button onclick={() => {
+                    // focusedZone = data
+                    geolocateControl?.trigger()
+                }} class="flat">Estoy en esta zona
+            </button>
+        </Popup>
+    {/if}
+    <GeoJSON data={zonesCollection} promoteId="ID ZONA">
+        <FillLayer
+                paint={{
+                    'fill-color': 'red',
+                    'fill-opacity': hoverStateFilter(0, 0.3),
+                }}
+                manageHoverState bind:hovered={hoveredZone}
+                onclick={({features}: {features: Feature<Polygon>[]}) => {if(!focusedZone) focusedZone = features[0]}}
+                onmouseenter={({features}: {features: Feature<Polygon>[]}) => {focusedZone = features[0]}}
+        />
 
         <LineLayer paint={{
             'line-color': 'red',
@@ -216,7 +232,6 @@
                     'line-opacity': 1,
                 }}/>
     </GeoJSON>
-
 
     <GeoJSON data={chosenElectionData as GeoJSONType} promoteId="CODIGO RECINTO">
         <CircleLayer paint={{
