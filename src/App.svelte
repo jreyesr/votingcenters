@@ -31,11 +31,13 @@
     // NOTE the import(...) below MUST use backticks `path/${filename}.json`, NOT "path/" + filename + ".json" or other forms of creating the import path
     // Vite does some kind of analysis of backtick dynamic imports and rewrites them to an object lookup taking into account all the files that exist in that directory
     // See https://vite.dev/guide/assets#new-url-url-import-meta-url especially the "How it works" accordion in that section
-    const rawElectionData: FeatureCollection = $derived((await import(`./data/${chosenElection}.json`)).default)
+    // NOTE keep the import split into two, $derived(import(...)) and then $derived(await ...), to avoid https://svelte.dev/docs/svelte/runtime-warnings#Client-warnings-await_waterfall
+    const rawElectionDataPromise = $derived(import(`./data/${chosenElection}.json`))
+    const rawElectionData: FeatureCollection = $derived((await rawElectionDataPromise).default)
     const chosenElectionData = $derived.by(() => {
         rawElectionData.features.forEach(f => {
             if (f.properties!["CODIGO RECINTO"].toString() in corrections)
-                (f.geometry as Point).coordinates = corrections[f.properties!["CODIGO RECINTO"]]
+                (f.geometry as Point).coordinates = (corrections as Record<string, number[]>)[f.properties!["CODIGO RECINTO"]]
         })
         return rawElectionData
     })
