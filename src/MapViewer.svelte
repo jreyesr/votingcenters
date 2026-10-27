@@ -11,32 +11,55 @@
         MapLibre,
         NavigationControl, GeolocateControl, FullscreenControl, ScaleControl,
         GeoJSON,
-        CircleLayer, FillLayer, LineLayer,
+        CircleLayer, FillLayer, LineLayer, SymbolLayer,
         Popup,
-        hoverStateFilter,
+        hoverStateFilter, zoomTransition,
     } from 'svelte-maplibre';
     import BasemapSwitcherControl from "./lib/BasemapSwitcherControl.svelte";
     import TimelineRadio from "./lib/TimelineRadio.svelte"
-
-    import {clusterEach, clusterReduce} from "@turf/clusters";
 
     import {convex} from "@turf/convex";
     import {buffer} from "@turf/buffer";
     import {distance} from "@turf/distance";
     import {centerOfMass} from "@turf/center-of-mass";
-    import {featureCollection, lineString} from "@turf/helpers";
+    import {clusterEach, clusterReduce} from "@turf/clusters";
+    import {featureCollection, lineString, point} from "@turf/helpers";
 
     let chosenElection = $state("2027_alcaldes")
 
     import corrections from './data/corrections.json' with {type: "json"}
     import type {ExpressionFilterSpecification} from "maplibre-gl";
 
+    type VotingCenterProperties = {
+        PROVINCIA: string
+        CANTON: string
+        PARROQUIA: string
+        ZONA: string
+        "CODIGO RECINTO": number
+        "NOMBRE RECINTO": string
+        "JUN FEM": number
+        "JUN MAS": number
+        "NUM JUNR": number
+        "JUN INIF": number
+        "JUN FINF": number
+        "JUN INIM": number
+        "JUN FINM": number
+        "NUMERO ELECTORES"?: number
+        "ID ZONA": number
+    }
+    type ZoneProperties = {
+        "ID ZONA": string
+        ZONA: string
+        PARROQUIA: string
+        center: Point
+    }
+
     // NOTE the import(...) below MUST use backticks `path/${filename}.json`, NOT "path/" + filename + ".json" or other forms of creating the import path
     // Vite does some kind of analysis of backtick dynamic imports and rewrites them to an object lookup taking into account all the files that exist in that directory
     // See https://vite.dev/guide/assets#new-url-url-import-meta-url especially the "How it works" accordion in that section
     // NOTE keep the import split into two, $derived(import(...)) and then $derived(await ...), to avoid https://svelte.dev/docs/svelte/runtime-warnings#Client-warnings-await_waterfall
     const rawElectionDataPromise = $derived(import(`./data/${chosenElection}.json`))
-    const rawElectionData: FeatureCollection = $derived((await rawElectionDataPromise).default)
+    const rawElectionData: FeatureCollection<Point, VotingCenterProperties> = $derived((await rawElectionDataPromise).default)
     const chosenElectionData = $derived.by(() => {
         rawElectionData.features.forEach(f => {
             if (f.properties!["CODIGO RECINTO"].toString() in corrections)
@@ -46,21 +69,35 @@
     })
 
     const zonesCollection = $derived.by(() => {
-        const zones: Feature[] = []
-        clusterEach(chosenElectionData as FeatureCollection, "ID ZONA", function (zone, zoneId) {
-            const hull = convex(zone)
+        const zones: Feature<Polygon, ZoneProperties>[] = []
+        clusterEach(chosenElectionData, "ID ZONA", function (zone, zoneId) {
+            const hull = convex(zone, {
+                properties: {
+                    "ID ZONA": zoneId,
+                    ZONA: zone.features[0].properties.ZONA,
+                    PARROQUIA: zone.features[0].properties.PARROQUIA,
+                    center: centerOfMass(zone).geometry
+                }
+            })
             if (hull) {
-                if (!hull.properties) hull.properties = {}
-                hull.properties["ID ZONA"] = zoneId
-                hull.properties["ZONA"] = zone.features[0].properties!["ZONA"]
-                zones.push(buffer(hull, 200, {units: 'meters'})!)
+                zones.push(buffer(hull, 200, {units: 'meters'}) as Feature<Polygon, ZoneProperties>)
             } else if (zone.features.length === 1) { // single point, just buffer it
-                zones.push(buffer(zone.features[0], 500, {units: 'meters'})!)
+                const singlePoint = point(
+                    zone.features[0].geometry.coordinates,
+                    {...zone.features[0].properties, center: zone.features[0].geometry}
+                )
+                zones.push(buffer(singlePoint, 500, {units: 'meters'}) as Feature<Polygon, ZoneProperties>)
             } else if (zone.features.length === 2) { // 2 points form a line
-                zones.push(buffer(lineString(
-                    zone.features.map(p => (p.geometry as Point).coordinates),
-                    {"ID ZONA": zoneId, "ZONA": zone.features[0].properties!["ZONA"]}
-                ), 500, {units: 'meters'})!)
+                const lineAcrossPoints = lineString(
+                    zone.features.map(p => p.geometry.coordinates),
+                    {
+                        "ID ZONA": zoneId,
+                        ZONA: zone.features[0].properties.ZONA,
+                        PARROQUIA: zone.features[0].properties.PARROQUIA,
+                        center: centerOfMass(zone).geometry
+                    }
+                )
+                zones.push(buffer(lineAcrossPoints, 500, {units: 'meters'}) as Feature<Polygon, ZoneProperties>)
             }
         });
         return featureCollection(zones)
@@ -78,16 +115,16 @@
     }
     const zonesInfo = $derived.by(() => {
         const info: Record<string, ZoneInfo> = {}
-        clusterReduce(chosenElectionData as FeatureCollection, "ID ZONA", function (prev: typeof info, zone, zoneId) {
+        clusterReduce(chosenElectionData, "ID ZONA", function (prev: typeof info, zone, zoneId) {
             prev[zoneId] = {
                 id: zoneId,
-                province: zone.features![0].properties!["PROVINCIA"],
-                canton: zone.features[0].properties!["CANTON"],
-                parish: zone.features[0].properties!["PARROQUIA"],
-                zone: zone.features[0].properties!["ZONA"],
-                numCenters: zone.features!.length,
-                numStations: zone.features!.reduce((acc, center) => acc + center.properties!["NUM JUNR"], 0),
-                numVoters: zone.features!.reduce((acc, center) => acc + center.properties!["NUMERO ELECTORES"], 0)
+                province: zone.features[0].properties["PROVINCIA"],
+                canton: zone.features[0].properties["CANTON"],
+                parish: zone.features[0].properties["PARROQUIA"],
+                zone: zone.features[0].properties["ZONA"],
+                numCenters: zone.features.length,
+                numStations: zone.features.reduce((acc, center) => acc + center.properties["NUM JUNR"], 0),
+                numVoters: zone.features.reduce((acc, center) => acc + (center.properties["NUMERO ELECTORES"] ?? 0), 0)
             }
             return prev
         }, info)
@@ -190,7 +227,7 @@
     {#if focusedZone}
         <Popup open
                closeButton closeOnMove onclose={() => focusedZone = undefined}
-               lngLat={centerOfFocusedZone!.coordinates}>
+               lngLat={centerOfFocusedZone!.coordinates as [number, number]}>
             {@const props = zonesInfo[focusedZone.properties!["ID ZONA"]]}
             <p><b>Zona: {props.zone ?? "(zona sin nombre)"}</b></p>
 
@@ -220,6 +257,18 @@
             'line-color': 'red',
             'line-width': hoverStateFilter(1, 2),
         }}/>
+
+        <SymbolLayer
+                paint={{
+                    'text-color': hoverStateFilter("#333", "black"),
+                    'text-opacity': zoomTransition(11, 0, 11.5, 1),
+                    'text-halo-color': hoverStateFilter('transparent', 'red'),
+                    'text-halo-width': 2,
+                }}
+                layout={{
+                    'text-field': ['coalesce', ['get', 'ZONA'], ['get', 'PARROQUIA']],
+                    'text-size': zoomTransition(11, 5, 13, 16)
+                }}/>
     </GeoJSON>
 
     <!-- line joining the center with its popup open to the user's current geolocation -->
