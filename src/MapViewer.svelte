@@ -135,10 +135,9 @@
     let hoveredZone: Feature | undefined = $state();
     const hoveredZoneId = $derived(hoveredZone?.properties?.["ID ZONA"].toString())
     const hoveredZoneCentersFilter: ExpressionFilterSpecification = $derived(hoveredZoneId ? ["==", ["to-string", ["get", "ID ZONA"]], hoveredZoneId] : false)
-    const hoveredZoneInfo = $derived(hoveredZoneId ? zonesInfo[hoveredZoneId] : undefined)
 
-    let focusedCenter = $state<Feature<Point>>()
-    let focusedZone = $state<Feature<Polygon>>()
+    let focusedCenter = $state<Feature<Point, VotingCenterProperties>>()
+    let focusedZone = $state<Feature<Polygon, ZoneProperties>>()
 
     let geolocateControl = $state<maplibregl.GeolocateControl>()
     let currentUserPosition = $state<GeolocationCoordinates>()
@@ -189,15 +188,15 @@
 <div style="padding-bottom: 20px;">
     <TimelineRadio
             options={[
-            {value: "2017_pres", label: "Presidenciales 2017", disabled: true},
-            {value: "2019_alcaldes", label: "Alcaldes 2019", disabled: true},
+            {value: "2017_pres", label: "Presidenciales 2017"},
+            {value: "2019_alcaldes", label: "Alcaldes 2019", disabled: true, tooltipRemark: "El distributivo no incluye información geográfica ni una forma de identificar los centros"},
             {value: "2021_pres", label: "Presidenciales 2021"},
             {value: "2023_alcaldes", label: "Alcaldes 2023"},
-            {value: "2023_pres", label: "Presidenciales 2023"},
+            {value: "2023_pres", label: "Presidenciales 2023", tooltipRemark: "Adelantadas por muerte cruzada"},
             {value: "2024_consulta", label: "Consulta 2024"},
             {value: "2025_pres", label: "Presidenciales 2025"},
             {value: "2025_consulta", label: "Consulta 2025"},
-            {value: "2027_alcaldes", label: "Alcaldes 2027 (2026)"},
+            {value: "2027_alcaldes", label: "Alcaldes 2027", tooltipRemark: "Adelantadas a noviembre/2026"},
         ]}
             color="gray"
             bind:value={chosenElection}
@@ -224,11 +223,11 @@
 
     <BasemapSwitcherControl/>
 
-    {#if focusedZone}
+    {#if focusedZone && focusedZone.properties["ID ZONA"] in zonesInfo}
         <Popup open
                closeButton closeOnMove onclose={() => focusedZone = undefined}
                lngLat={centerOfFocusedZone!.coordinates as [number, number]}>
-            {@const props = zonesInfo[focusedZone.properties!["ID ZONA"]]}
+            {@const props = zonesInfo[focusedZone.properties["ID ZONA"]]}
             <p><b>Zona: {props.zone ?? "(zona sin nombre)"}</b></p>
 
             <p>Prov: {props.province} > Cant: {props.canton} > Parr: {props.parish}</p>
@@ -249,8 +248,8 @@
                     'fill-opacity': hoverStateFilter(0, 0.3),
                 }}
                 manageHoverState bind:hovered={hoveredZone}
-                onclick={({features}: {features: Feature<Polygon>[]}) => {if(!focusedZone) focusedZone = features[0]}}
-                onmouseenter={({features}: {features: Feature<Polygon>[]}) => {focusedZone = features[0]}}
+                onclick={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {if(!focusedZone) focusedZone = features[0]}}
+                onmouseenter={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {focusedZone = features[0]}}
         />
 
         <LineLayer paint={{
@@ -312,7 +311,7 @@
         }}
                      hoverCursor="context-menu">
             <Popup openOn="click" closeButton popupClass="narrow" onclose={() => focusedCenter = undefined}>
-                {#snippet children({data}: { data: Feature })}
+                {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> })}
                     {@const props = data!.properties!}
                     <p>[{props["CODIGO RECINTO"]}] <b>Recinto: {props["NOMBRE RECINTO"]}</b></p>
 

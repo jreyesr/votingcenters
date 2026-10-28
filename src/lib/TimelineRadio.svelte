@@ -2,7 +2,7 @@
     let {color = "black", options = [], value = $bindable()}: {
         // name: string,
         color: string
-        options: { value: string, label: string, disabled?: true }[],
+        options: { value: string, label: string, disabled?: true, tooltipRemark?: string }[],
         value: string
     } = $props()
 
@@ -159,6 +159,7 @@
                 for={optionId}
                 data-text={option.label}
                 data-disabled={option.disabled}
+                title={option.tooltipRemark}
         ></label>
     {/each}
 </div>
