@@ -1,11 +1,17 @@
 <script>
-  import {Router, Link, Route} from "svelte5-router";
+  import {Router, Link, Route, listen} from "svelte5-router";
   import MapViewer from "./MapViewer.svelte";
   import ReportError from "./ReportError.svelte";
   import Privacy from "./Privacy.svelte";
   import About from "./About.svelte";
 
   let url = $state("");
+
+  let querystring = $state(document.location.search);
+  listen(({location}) => {
+    querystring = location.search
+  })
+  const query = $derived(new URLSearchParams(querystring))
 </script>
 
 <Router {url}>
@@ -27,7 +33,7 @@
     <nav class="bottombar">
         Esta página <b>no</b> está asociada con el CNE
         <br>
-        <Link to="/error">Reportar un error</Link>
+        <Link to={"/error" + (query.has("election") ? ("?election=" + query.get("election")) : "")}>Reportar un error</Link>
         /
         <Link to="/about">Acerca de</Link>
         /

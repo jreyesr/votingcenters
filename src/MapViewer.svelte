@@ -15,6 +15,8 @@
         Popup,
         hoverStateFilter, zoomTransition,
     } from 'svelte-maplibre';
+    import { useLocation, navigate } from "svelte5-router";
+
     import BasemapSwitcherControl from "./lib/BasemapSwitcherControl.svelte";
     import TimelineRadio from "./lib/TimelineRadio.svelte"
 
@@ -25,7 +27,17 @@
     import {clusterEach, clusterReduce} from "@turf/clusters";
     import {featureCollection, lineString, point} from "@turf/helpers";
 
-    let chosenElection = $state("2027_alcaldes")
+    const location = useLocation();
+    const query = $derived(new URLSearchParams($location.search))
+
+    // svelte-ignore state_referenced_locally
+    let chosenElection = $state(query.get("election") ?? "2027_alcaldes")
+    $effect(() => {
+        if(query.get("election") !== chosenElection) {
+            query.set("election", chosenElection)
+            navigate($location.pathname + "?" + query.toString())
+        }
+    })
 
     import corrections from './data/corrections.json' with {type: "json"}
     import type {ExpressionFilterSpecification} from "maplibre-gl";
