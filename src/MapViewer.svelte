@@ -6,6 +6,7 @@
 </script>
 
 <script lang="ts">
+    import {tick} from 'svelte';
     import type {GeoJSON as GeoJSONType, Feature, FeatureCollection, Point, Polygon} from 'geojson';
     import {
         MapLibre,
@@ -15,7 +16,7 @@
         Popup,
         hoverStateFilter, zoomTransition,
     } from 'svelte-maplibre';
-    import { useLocation, navigate } from "svelte5-router";
+    import {useLocation, navigate} from "svelte5-router";
 
     import BasemapSwitcherControl from "./lib/BasemapSwitcherControl.svelte";
     import TimelineRadio from "./lib/TimelineRadio.svelte"
@@ -33,14 +34,19 @@
     // svelte-ignore state_referenced_locally
     let chosenElection = $state(query.get("election") ?? "2027_alcaldes")
     $effect(() => {
-        if(query.get("election") !== chosenElection) {
-            query.set("election", chosenElection)
-            navigate($location.pathname + "?" + query.toString())
-        }
+        chosenElection; // NEEDED to force the effect to run on changes to chosenElection
+        // NOTE voodoo magic, makes the navigate() not run many times, probably slows down the effect recomputation
+        tick().then(() => {
+            if (query.get("election") !== chosenElection) {
+                query.set("election", chosenElection)
+                navigate($location.pathname + "?" + query.toString())
+            }
+        })
     })
 
     import corrections from './data/corrections.json' with {type: "json"}
     import type {ExpressionFilterSpecification} from "maplibre-gl";
+    import LoadingAnimation from "./lib/LoadingAnimation.svelte";
 
     type VotingCenterProperties = {
         PROVINCIA: string
@@ -200,12 +206,13 @@
 <div style="padding-bottom: 20px;">
     <TimelineRadio
             options={[
+            {value: "before", label: "(187 años de vida nacional)", disabled: true, tooltipRemark: "Aparentemente no hubo nunca elecciones hasta 2017 (?)"},
             {value: "2017_pres", label: "Presidenciales 2017"},
-            {value: "2019_alcaldes", label: "Alcaldes 2019", disabled: true, tooltipRemark: "El distributivo no incluye información geográfica ni una forma de identificar los centros"},
+            {value: "2019_alcaldes", label: "Alcaldes 2019", disabled: true, tooltipRemark: "El distributivo de esta elección no incluye información geográfica ni una forma de identificar los centros"},
             {value: "2021_pres", label: "Presidenciales 2021"},
             {value: "2023_alcaldes", label: "Alcaldes 2023"},
-            {value: "2023_pres", label: "Presidenciales 2023", tooltipRemark: "Adelantadas por muerte cruzada"},
-            {value: "2024_consulta", label: "Consulta 2024"},
+            {value: "2023_pres", label: "Presidenciales 2023", tooltipRemark: "Adelantadas por muerte cruzada, posiblemente usa la misma distribución que la elección anterior"},
+            {value: "2024_consulta", label: "Consulta 2024", tooltipRemark: "Posiblemente usa la misma distribución que las dos elecciones anteriores"},
             {value: "2025_pres", label: "Presidenciales 2025"},
             {value: "2025_consulta", label: "Consulta 2025"},
             {value: "2027_alcaldes", label: "Alcaldes 2027", tooltipRemark: "Adelantadas a noviembre/2026"},
@@ -215,86 +222,93 @@
     />
 </div>
 
-<MapLibre
-        bind:map={map}
-        center={[-78.8558726,-1.8128107]}
-        zoom={6.5}
-        maxZoom={19}
-        class="map"
-        standardControls={false}
-        style={{
+<div style="position: relative; min-height: 100px;">
+    {#if $effect.pending()}
+        <div class="loadingOverlay">
+            <LoadingAnimation/>
+        </div>
+    {/if}
+
+    <MapLibre
+            bind:map={map}
+            center={[-78.8558726,-1.8128107]}
+            zoom={6.5}
+            maxZoom={19}
+            class="map"
+            standardControls={false}
+            style={{
           version: 8,
           sources: {},
           layers: [],
         }}
->
-    <NavigationControl showCompass={false}/>
-    <GeolocateControl showAccuracyCircle={true} bind:control={geolocateControl}/>
-    <FullscreenControl/>
-    <ScaleControl/>
+    >
+        <NavigationControl showCompass={false}/>
+        <GeolocateControl showAccuracyCircle={true} bind:control={geolocateControl}/>
+        <FullscreenControl/>
+        <ScaleControl/>
 
-    <BasemapSwitcherControl/>
+        <BasemapSwitcherControl/>
 
-    {#if focusedZone && focusedZone.properties["ID ZONA"] in zonesInfo}
-        <Popup open
-               closeButton closeOnMove onclose={() => focusedZone = undefined}
-               lngLat={centerOfFocusedZone!.coordinates as [number, number]}>
-            {@const props = zonesInfo[focusedZone.properties["ID ZONA"]]}
-            <p><b>Zona: {props.zone ?? "(zona sin nombre)"}</b></p>
+        {#if focusedZone && focusedZone.properties["ID ZONA"] in zonesInfo}
+            <Popup open
+                   closeButton closeOnMove onclose={() => focusedZone = undefined}
+                   lngLat={centerOfFocusedZone!.coordinates as [number, number]}>
+                {@const props = zonesInfo[focusedZone.properties["ID ZONA"]]}
+                <p><b>Zona: {props.zone ?? "(zona sin nombre)"}</b></p>
 
-            <p>Prov: {props.province} > Cant: {props.canton} > Parr: {props.parish}</p>
-            <p>{props.numCenters} centros, {props.numStations} JRVs</p>
-            {#if !isNaN(props.numVoters)}<p>Atiende <b>{props.numVoters} votantes</b></p>{/if}
+                <p>Prov: {props.province} > Cant: {props.canton} > Parr: {props.parish}</p>
+                <p>{props.numCenters} centros, {props.numStations} JRVs</p>
+                {#if props.numVoters}<p>Atiende <b>{props.numVoters} votantes</b></p>{/if}
 
-            <button onclick={() => {
+                <button onclick={() => {
                     // focusedZone = data
                     geolocateControl?.trigger()
                 }} class="flat">Estoy en esta zona
-            </button>
-        </Popup>
-    {/if}
-    <GeoJSON data={zonesCollection} promoteId="ID ZONA">
-        <FillLayer
-                paint={{
+                </button>
+            </Popup>
+        {/if}
+        <GeoJSON data={zonesCollection} promoteId="ID ZONA">
+            <FillLayer
+                    paint={{
                     'fill-color': 'red',
                     'fill-opacity': hoverStateFilter(0, 0.3),
                 }}
-                manageHoverState bind:hovered={hoveredZone}
-                onclick={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {if(!focusedZone) focusedZone = features[0]}}
-                onmouseenter={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {focusedZone = features[0]}}
-        />
+                    manageHoverState bind:hovered={hoveredZone}
+                    onclick={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {if(!focusedZone) focusedZone = features[0]}}
+                    onmouseenter={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {focusedZone = features[0]}}
+            />
 
-        <LineLayer paint={{
+            <LineLayer paint={{
             'line-color': 'red',
             'line-width': hoverStateFilter(1, 2),
         }}/>
 
-        <SymbolLayer
-                paint={{
+            <SymbolLayer
+                    paint={{
                     'text-color': hoverStateFilter("#333", "black"),
                     'text-opacity': zoomTransition(11, 0, 11.5, 1),
                     'text-halo-color': hoverStateFilter('transparent', 'red'),
                     'text-halo-width': 2,
                 }}
-                layout={{
+                    layout={{
                     'text-field': ['coalesce', ['get', 'ZONA'], ['get', 'PARROQUIA']],
                     'text-size': zoomTransition(11, 5, 13, 16)
                 }}/>
-    </GeoJSON>
+        </GeoJSON>
 
-    <!-- line joining the center with its popup open to the user's current geolocation -->
-    <GeoJSON data={lineBetweenUserAndCenter}>
-        <LineLayer
-                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-                paint={{
+        <!-- line joining the center with its popup open to the user's current geolocation -->
+        <GeoJSON data={lineBetweenUserAndCenter}>
+            <LineLayer
+                    layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                    paint={{
                     'line-width': 4,
                     'line-color': '#008800',
                     'line-opacity': 1,
                 }}/>
-    </GeoJSON>
+        </GeoJSON>
 
-    <GeoJSON data={chosenElectionData as GeoJSONType} promoteId="CODIGO RECINTO">
-        <CircleLayer paint={{
+        <GeoJSON data={chosenElectionData as GeoJSONType} promoteId="CODIGO RECINTO">
+            <CircleLayer paint={{
             'circle-color': [
                 "case",
                 hoveredZoneCentersFilter,
@@ -321,31 +335,32 @@
                 13, 1.5,
             ],
         }}
-                     hoverCursor="context-menu">
-            <Popup openOn="click" closeButton popupClass="narrow" onclose={() => focusedCenter = undefined}>
-                {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> })}
-                    {@const props = data!.properties!}
-                    <p>[{props["CODIGO RECINTO"]}] <b>Recinto: {props["NOMBRE RECINTO"]}</b></p>
+                         hoverCursor="context-menu">
+                <Popup openOn="click" closeButton popupClass="narrow" onclose={() => focusedCenter = undefined}>
+                    {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> })}
+                        {@const props = data!.properties!}
+                        <p>[{props["CODIGO RECINTO"]}] <b>Recinto: {props["NOMBRE RECINTO"]}</b></p>
 
-                    <p>Prov: {props["PROVINCIA"]} > Cant: {props["CANTON"]} > Parr: {props["PARROQUIA"]} >
-                        Zona: {props["ZONA"] || "(sin nombre)"}</p>
-                    <p>{props["NUM JUNR"]} JRVs, {props["JUN FEM"]}F ({props["JUN INIF"]}F-{props["JUN FINF"]}F)
-                        + {props["JUN MAS"]}M ({props["JUN INIM"]}M-{props["JUN FINM"]}M)</p>
-                    {#if props["NUMERO ELECTORES"]}<p>Atiende <b>{props["NUMERO ELECTORES"]} votantes</b></p>{/if}
+                        <p>Prov: {props["PROVINCIA"]} > Cant: {props["CANTON"]} > Parr: {props["PARROQUIA"]} >
+                            Zona: {props["ZONA"] || "(sin nombre)"}</p>
+                        <p>{props["NUM JUNR"]} JRVs, {props["JUN FEM"]}F ({props["JUN INIF"]}F-{props["JUN FINF"]}F)
+                            + {props["JUN MAS"]}M ({props["JUN INIM"]}M-{props["JUN FINM"]}M)</p>
+                        {#if props["NUMERO ELECTORES"]}<p>Atiende <b>{props["NUMERO ELECTORES"]} votantes</b></p>{/if}
 
-                    <button onclick={() => {
+                        <button onclick={() => {
                         focusedCenter = data
                         geolocateControl?.trigger()
                     }} class="flat">Voto aquí
-                    </button>
-                    {#if distanceBetweenUserAndCenterDisplay !== undefined}
-                        {distanceBetweenUserAndCenterDisplay} desde tu ubicación
-                    {/if}
-                {/snippet}
-            </Popup>
-        </CircleLayer>
-    </GeoJSON>
-</MapLibre>
+                        </button>
+                        {#if distanceBetweenUserAndCenterDisplay !== undefined}
+                            {distanceBetweenUserAndCenterDisplay} desde tu ubicación
+                        {/if}
+                    {/snippet}
+                </Popup>
+            </CircleLayer>
+        </GeoJSON>
+    </MapLibre>
+</div>
 
 <style>
     :global(.map) {
@@ -365,5 +380,15 @@
 
     :global(.maplibregl-popup.narrow) {
         max-width: 300px;
+    }
+
+    div.loadingOverlay {
+        z-index: 300; /* map controls=1, popups=200 */
+        position: absolute;
+        height: 100%;
+        width: 100%;
+        align-content: center;
+        background-color: lightgrey;
+        opacity: 0.6;
     }
 </style>

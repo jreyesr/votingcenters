@@ -1,5 +1,5 @@
 <script>
-    import correctionsUrl from './data/corrections.json?url'
+  import correctionsUrl from './data/corrections.json?url'
 </script>
 
 <main><h1>Acerca de</h1>
@@ -34,6 +34,18 @@
         que sí tiene ubicaciones, y luego los recintos faltantes fueron localizados a mano usando Google Maps +
         OpenStreetMap + Waze.
     </p>
+
+    <p>
+        Esta página contiene código basado en:
+    </p>
+    <ul>
+        <li><a href="https://codepen.io/brandonmcconnell/pen/Zqjdmg" target="_blank" rel="external">https://codepen.io/brandonmcconnell/pen/Zqjdmg</a>
+            para el selector de proceso electoral
+        </li>
+        <li><a href="https://tobiasahlin.com/spinkit/" target="_blank" rel="external">https://tobiasahlin.com/spinkit/</a> para la animación cuando el
+            mapa está cargando
+        </li>
+    </ul>
 </main>
 
 <style>
