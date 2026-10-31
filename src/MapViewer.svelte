@@ -84,7 +84,7 @@
         rawElectionData.features.forEach(f => {
             // compute some sort of hash of the zone's PROVINCIA|CANTON|PARROQUIA|ZONA, this uses CRC24 that has 24-bit output
             // then split those 24 bits into 3 bytes and use them as R, G, B
-            const crcZoneName = crc24(`${f.properties.PROVINCIA}|${f.properties.CANTON}|${f.properties.PARROQUIA}|${f.properties.ZONA}`)
+            const crcZoneName = crc24(`${f.properties.PROVINCIA.trim()}|${f.properties.CANTON.trim()}|${f.properties.PARROQUIA.trim()}|${f.properties.ZONA?.trim()}`)
             f.properties["HASH ZONA"] = [(crcZoneName >> 16) % 256, (crcZoneName >> 8) % 256, crcZoneName % 256]
 
             if (f.properties["CODIGO RECINTO"].toString() in corrections)
