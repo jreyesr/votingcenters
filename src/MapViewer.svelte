@@ -27,6 +27,7 @@
     import {centerOfMass} from "@turf/center-of-mass";
     import {clusterEach, clusterReduce} from "@turf/clusters";
     import {featureCollection, lineString, point} from "@turf/helpers";
+    import crc24 from 'crc/crc24';
 
     const location = useLocation();
     const query = $derived(new URLSearchParams($location.search))
@@ -64,6 +65,7 @@
         "JUN FINM": number
         "NUMERO ELECTORES"?: number
         "ID ZONA": number
+        "HASH ZONA": [number, number, number]
     }
     type ZoneProperties = {
         "ID ZONA": string
@@ -80,8 +82,13 @@
     const rawElectionData: FeatureCollection<Point, VotingCenterProperties> = $derived((await rawElectionDataPromise).default)
     const chosenElectionData = $derived.by(() => {
         rawElectionData.features.forEach(f => {
-            if (f.properties!["CODIGO RECINTO"].toString() in corrections)
-                (f.geometry as Point).coordinates = (corrections as Record<string, number[]>)[f.properties!["CODIGO RECINTO"]]
+            // compute some sort of hash of the zone's PROVINCIA|CANTON|PARROQUIA|ZONA, this uses CRC24 that has 24-bit output
+            // then split those 24 bits into 3 bytes and use them as R, G, B
+            const crcZoneName = crc24(`${f.properties.PROVINCIA}|${f.properties.CANTON}|${f.properties.PARROQUIA}|${f.properties.ZONA}`)
+            f.properties["HASH ZONA"] = [(crcZoneName >> 16) % 256, (crcZoneName >> 8) % 256, crcZoneName % 256]
+
+            if (f.properties["CODIGO RECINTO"].toString() in corrections)
+                (f.geometry as Point).coordinates = (corrections as Record<string, number[]>)[f.properties["CODIGO RECINTO"]]
         })
         return rawElectionData
     })
@@ -315,9 +322,9 @@
                 "red",
                 [
                     "rgb",
-                    ["%", ["*", ["get", 'ID ZONA'], 25601], 256],
-                    ["%", ["*", ["get", 'ID ZONA'], 25621], 256],
-                    ["%", ["*", ["get", 'ID ZONA'], 25657], 256],
+                    ["at", 0, ["get", 'HASH ZONA']],
+                    ["at", 1, ["get", 'HASH ZONA']],
+                    ["at", 2, ["get", 'HASH ZONA']],
                 ]
             ],
             'circle-radius': [
