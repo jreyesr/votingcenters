@@ -303,7 +303,7 @@
         }}
                     hoverCursor="context-menu">
                 <Popup openOn="click" closeButton popupClass="narrow" onclose={() => focusedCenter = undefined}>
-                    {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> })}
+                    {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> | undefined })}
                         {@const props = data!.properties!}
                         <p>[{props["CODIGO RECINTO"]}] <b>Recinto: {props["NOMBRE RECINTO"]}</b></p>
 

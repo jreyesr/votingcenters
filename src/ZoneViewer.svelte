@@ -14,9 +14,10 @@
         ScaleControl,
     } from "svelte-maplibre";
     import BasemapSwitcherControl from "./lib/BasemapSwitcherControl.svelte";
-    import {featureCollection, lineStrings} from "@turf/helpers";
+    import {featureCollection, lineString, lineStrings} from "@turf/helpers";
     import * as maplibregl from "maplibre-gl";
     import bbox from "@turf/bbox";
+    import {distance} from "@turf/distance";
 
     const activeElections = $derived(elections.filter(e => e.disabled === undefined))
 
@@ -91,9 +92,26 @@
         }
     })
 
+    type LineProperties = VotingCenterProperties & {distance: number}
     const linesToAllCenters = $derived(currentUserPosition && lastActiveCenters
-        ? lineStrings(lastActiveCenters.features.map(center => ([center.geometry.coordinates, [currentUserPosition!.longitude, currentUserPosition!.latitude]])))
-        : lineStrings([]))
+        ? featureCollection(lastActiveCenters.features
+            .map(center => lineString([center.geometry.coordinates, [currentUserPosition!.longitude, currentUserPosition!.latitude]], {...center.properties}))
+            .map(centerLine => ({
+                ...centerLine,
+                properties: {
+                    ...centerLine.properties,
+                    distance: distance(centerLine.geometry.coordinates[0], centerLine.geometry.coordinates[centerLine.geometry.coordinates.length - 1])
+                }
+            })))
+        : lineStrings<LineProperties>([]))
+    const rangeOfDistances = $derived(linesToAllCenters.features.length ? {
+        min: Math.min(Infinity, ...linesToAllCenters.features.map(c => c.properties.distance)),
+        max: Math.max(0, ...linesToAllCenters.features.map(c => c.properties.distance)),
+    } : {min: 0, max: 0})
+    // Total number of electors, summed from all the centers, if centers have #electors property, otherwise it's just the number of centers (as if each center had exactly 1 elector)
+    const totalElectors = $derived(linesToAllCenters.features.reduce((acc, c) => acc + (c.properties['NUMERO ELECTORES'] ?? 1), 0))
+    // Average of distance between current location and all centers, weighted by the number of electors in each (if available)
+    const avgExpectedDistance = $derived(linesToAllCenters.features.reduce((acc, c) => acc + c.properties.distance * (c.properties['NUMERO ELECTORES'] ?? 1), 0) / totalElectors)
 </script>
 
 <svg style="float:right; z-index: 2000; margin-right: 100px; max-width:200px; overflow: visible;"
@@ -143,6 +161,9 @@
     Cantón: {Object.values(zoneInfoAcrossElections)[0].canton} >
     Parroquia: {Object.values(zoneInfoAcrossElections)[0].parish}</p>
 
+<p>Entre {rangeOfDistances.min.toFixed(1)} y {rangeOfDistances.max.toFixed(1)} km desde la posición actual</p>
+<p>Distancia promedio esperada: {avgExpectedDistance.toFixed(1)} km</p>
+
 <MapLibre
         bind:map={map}
         center={[-78.8558726,-1.8128107]}
@@ -165,36 +186,24 @@
 
     <BasemapSwitcherControl/>
 
-    <!--<GeoJSON data={zonesCollection} promoteId="ID ZONA">
-        <FillLayer
-                eventsIfTopMost
+    <GeoJSON data={linesToAllCenters} promoteId="ID RECINTO">
+        <LineLayer
+                hoverCursor="help"
+                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
                 paint={{
-                    'fill-color': 'red',
-                    'fill-opacity': hoverStateFilter(0, 0.3),
-                }}
-                manageHoverState bind:hovered={hoveredZone}
-                onclick={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {if(!focusedZone) focusedZone = features[0]}}
-                onmouseenter={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {focusedZone = features[0]}}
-        />
-
-        <LineLayer paint={{
-            'line-color': 'red',
-            'line-width': hoverStateFilter(1, 2),
-        }}/>
-
-        <SymbolLayer
-                eventsIfTopMost
-                paint={{
-                    'text-color': hoverStateFilter("#333", "black"),
-                    'text-opacity': zoomTransition(11, 0, 11.5, 1),
-                    'text-halo-color': hoverStateFilter('transparent', 'red'),
-                    'text-halo-width': 2,
-                }}
-                layout={{
-                    'text-field': ['coalesce', ['get', 'ZONA'], ['get', 'PARROQUIA']],
-                    'text-size': zoomTransition(11, 5, 13, 16)
-                }}/>
-    </GeoJSON>-->
+                    'line-width': 4,
+                    'line-color': '#008800',
+                    'line-opacity': 1,
+                }}>
+            <Popup openOn="hover" popupClass="narrow">
+                {#snippet children({data}: { data: Feature<Point, LineProperties> | undefined })}
+                                            {@const props = data!.properties!}
+                    <p>Al centro <b>{props["NOMBRE RECINTO"]}</b></p>
+                    <p>{props.distance > 1 ? props.distance.toFixed(1) : Math.round(props.distance * 100) * 10} {props.distance > 1 ? "km" : "m"}</p>
+                {/snippet}
+            </Popup>
+        </LineLayer>
+    </GeoJSON>
 
     <GeoJSON id="votingCenters" data={lastActiveCenters} promoteId="CODIGO RECINTO">
         <CircleLayer
@@ -232,15 +241,6 @@
         </CircleLayer>
     </GeoJSON>
 
-    <GeoJSON data={linesToAllCenters!}>
-        <LineLayer
-                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-                paint={{
-                    'line-width': 4,
-                    'line-color': '#008800',
-                    'line-opacity': 1,
-                }}/>
-    </GeoJSON>
 
 </MapLibre>
 
