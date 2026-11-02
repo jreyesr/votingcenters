@@ -4,6 +4,7 @@
   import ReportError from "./ReportError.svelte";
   import Privacy from "./Privacy.svelte";
   import About from "./About.svelte";
+  import ZoneViewer from "./ZoneViewer.svelte";
 
   let url = $state("");
 
@@ -19,6 +20,13 @@
         <Route path="/">
             <MapViewer/>
         </Route>
+        <Route path="/zone/:zonePath">
+            {#snippet children(params)}
+                {#if params.zonePath}
+                    <ZoneViewer zonePath={params.zonePath.split(";")}/>
+                {/if}
+            {/snippet}
+        </Route>
         <Route path="/error">
             <ReportError/>
         </Route>
@@ -33,7 +41,8 @@
     <nav class="bottombar">
         Esta página <b>no</b> está asociada con el CNE
         <br>
-        <Link to={"/error" + (query.has("election") ? ("?election=" + query.get("election")) : "")}>Reportar un error</Link>
+        <Link to={"/error" + (query.has("election") ? ("?election=" + query.get("election")) : "")}>Reportar un error
+        </Link>
         /
         <Link to="/about">Acerca de</Link>
         /

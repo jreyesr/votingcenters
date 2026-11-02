@@ -16,7 +16,7 @@
         Popup,
         hoverStateFilter, zoomTransition,
     } from 'svelte-maplibre';
-    import {useLocation, navigate} from "svelte5-router";
+    import {useLocation, navigate, Link} from "svelte5-router";
 
     import BasemapSwitcherControl from "./lib/BasemapSwitcherControl.svelte";
     import TimelineRadio from "./lib/TimelineRadio.svelte"
@@ -48,31 +48,7 @@
     import corrections from './data/corrections.json' with {type: "json"}
     import type {ExpressionFilterSpecification} from "maplibre-gl";
     import LoadingAnimation from "./lib/LoadingAnimation.svelte";
-
-    type VotingCenterProperties = {
-        PROVINCIA: string
-        CANTON: string
-        PARROQUIA: string
-        ZONA: string
-        "CODIGO RECINTO": number
-        "NOMBRE RECINTO": string
-        "JUN FEM": number
-        "JUN MAS": number
-        "NUM JUNR": number
-        "JUN INIF": number
-        "JUN FINF": number
-        "JUN INIM": number
-        "JUN FINM": number
-        "NUMERO ELECTORES"?: number
-        "ID ZONA": number
-        "HASH ZONA": [number, number, number]
-    }
-    type ZoneProperties = {
-        "ID ZONA": string
-        ZONA: string
-        PARROQUIA: string
-        center: Point
-    }
+    import {elections, type VotingCenterProperties, type ZoneInfo, type ZoneProperties} from "./elections";
 
     // NOTE the import(...) below MUST use backticks `path/${filename}.json`, NOT "path/" + filename + ".json" or other forms of creating the import path
     // Vite does some kind of analysis of backtick dynamic imports and rewrites them to an object lookup taking into account all the files that exist in that directory
@@ -128,16 +104,6 @@
         return featureCollection(zones)
     })
 
-    type ZoneInfo = {
-        id: number,
-        province: string,
-        canton: string,
-        parish: string,
-        zone: string,
-        numCenters: number,
-        numStations: number,
-        numVoters: number
-    }
     const zonesInfo = $derived.by(() => {
         const info: Record<string, ZoneInfo> = {}
         clusterReduce(chosenElectionData, "ID ZONA", function (prev: typeof info, zone, zoneId) {
@@ -212,18 +178,7 @@
 
 <div style="padding-bottom: 20px;">
     <TimelineRadio
-            options={[
-            {value: "before", label: "(187 años de vida nacional)", disabled: true, tooltipRemark: "Aparentemente no hubo nunca elecciones hasta 2017 (?)"},
-            {value: "2017_pres", label: "Presidenciales 2017"},
-            {value: "2019_alcaldes", label: "Alcaldes 2019", disabled: true, tooltipRemark: "El distributivo de esta elección no incluye información geográfica ni una forma de identificar los centros"},
-            {value: "2021_pres", label: "Presidenciales 2021"},
-            {value: "2023_alcaldes", label: "Alcaldes 2023"},
-            {value: "2023_pres", label: "Presidenciales 2023", tooltipRemark: "Adelantadas por muerte cruzada, posiblemente usa la misma distribución que la elección anterior"},
-            {value: "2024_consulta", label: "Consulta 2024", tooltipRemark: "Posiblemente usa la misma distribución que las dos elecciones anteriores"},
-            {value: "2025_pres", label: "Presidenciales 2025"},
-            {value: "2025_consulta", label: "Consulta 2025"},
-            {value: "2027_alcaldes", label: "Alcaldes 2027", tooltipRemark: "Adelantadas a noviembre/2026"},
-        ]}
+            options={elections}
             color="gray"
             bind:value={chosenElection}
     />
@@ -267,15 +222,16 @@
                 <p>{props.numCenters} centros, {props.numStations} JRVs</p>
                 {#if props.numVoters}<p>Atiende <b>{props.numVoters} votantes</b></p>{/if}
 
-                <button onclick={() => {
+                <Link class="flat" to={"/zone/" + [props.province.trim(), props.canton.trim(), props.parish.trim(), props.zone?.trim() ?? ""].join(";").replaceAll("/", "%2F")}>Estoy en esta zona</Link>
+                <!--<button onclick={() => {
                     // focusedZone = data
                     geolocateControl?.trigger()
-                }} class="flat">Estoy en esta zona
-                </button>
+                }} class="flat">Estoy en esta zona-->
             </Popup>
         {/if}
         <GeoJSON data={zonesCollection} promoteId="ID ZONA">
             <FillLayer
+                    eventsIfTopMost
                     paint={{
                     'fill-color': 'red',
                     'fill-opacity': hoverStateFilter(0, 0.3),
@@ -291,6 +247,7 @@
         }}/>
 
             <SymbolLayer
+                    eventsIfTopMost
                     paint={{
                     'text-color': hoverStateFilter("#333", "black"),
                     'text-opacity': zoomTransition(11, 0, 11.5, 1),
@@ -315,7 +272,9 @@
         </GeoJSON>
 
         <GeoJSON data={chosenElectionData as GeoJSONType} promoteId="CODIGO RECINTO">
-            <CircleLayer paint={{
+            <CircleLayer
+                    eventsIfTopMost
+                    paint={{
             'circle-color': [
                 "case",
                 hoveredZoneCentersFilter,
@@ -342,7 +301,7 @@
                 13, 1.5,
             ],
         }}
-                         hoverCursor="context-menu">
+                    hoverCursor="context-menu">
                 <Popup openOn="click" closeButton popupClass="narrow" onclose={() => focusedCenter = undefined}>
                     {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> })}
                         {@const props = data!.properties!}
@@ -374,7 +333,7 @@
         height: 800px;
     }
 
-    button.flat {
+    :global(a.flat) {
         border: unset;
         border: 1px solid dodgerblue;
         color: dodgerblue;
@@ -383,6 +342,7 @@
         font-size: 1.2em;
         border-radius: 4px;
         background-color: unset;
+        text-decoration: unset;
     }
 
     :global(.maplibregl-popup.narrow) {
