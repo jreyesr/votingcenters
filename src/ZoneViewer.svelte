@@ -10,7 +10,6 @@
         CircleLayer,
         FullscreenControl, GeoJSON, GeolocateControl,
         LineLayer,
-        MapEvents,
         MapLibre, NavigationControl, Popup,
         ScaleControl,
     } from "svelte-maplibre";
@@ -18,7 +17,6 @@
     import {featureCollection, lineStrings} from "@turf/helpers";
     import * as maplibregl from "maplibre-gl";
     import bbox from "@turf/bbox";
-    import {featureEach} from "@turf/meta";
 
     const activeElections = $derived(elections.filter(e => e.disabled === undefined))
 
