@@ -92,7 +92,7 @@
         }
     })
 
-    type LineProperties = VotingCenterProperties & {distance: number}
+    type LineProperties = VotingCenterProperties & { distance: number }
     const linesToAllCenters = $derived(currentUserPosition && lastActiveCenters
         ? featureCollection(lastActiveCenters.features
             .map(center => lineString([center.geometry.coordinates, [currentUserPosition!.longitude, currentUserPosition!.latitude]], {...center.properties}))
@@ -108,13 +108,14 @@
         min: Math.min(Infinity, ...linesToAllCenters.features.map(c => c.properties.distance)),
         max: Math.max(0, ...linesToAllCenters.features.map(c => c.properties.distance)),
     } : {min: 0, max: 0})
+    const hasNumberOfElectorsInfo = $derived(Boolean(linesToAllCenters.features[0]?.properties['NUMERO ELECTORES']))
     // Total number of electors, summed from all the centers, if centers have #electors property, otherwise it's just the number of centers (as if each center had exactly 1 elector)
     const totalElectors = $derived(linesToAllCenters.features.reduce((acc, c) => acc + (c.properties['NUMERO ELECTORES'] ?? 1), 0))
     // Average of distance between current location and all centers, weighted by the number of electors in each (if available)
     const avgExpectedDistance = $derived(linesToAllCenters.features.reduce((acc, c) => acc + c.properties.distance * (c.properties['NUMERO ELECTORES'] ?? 1), 0) / totalElectors)
 </script>
 
-<svg style="float:right; z-index: 2000; margin-right: 100px; max-width:200px; overflow: visible;"
+<svg style="max-width:200px; overflow: visible;"
      viewBox="80 80 240 240"
      xmlns="http://www.w3.org/2000/svg"
      xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -162,7 +163,12 @@
     Parroquia: {Object.values(zoneInfoAcrossElections)[0].parish}</p>
 
 <p>Entre {rangeOfDistances.min.toFixed(1)} y {rangeOfDistances.max.toFixed(1)} km desde la posición actual</p>
-<p>Distancia promedio esperada: {avgExpectedDistance.toFixed(1)} km</p>
+<p>Distancia promedio esperada: <b>
+    {#if hasNumberOfElectorsInfo}<abbr
+            title="Considerando la cantidad de electores en cada recinto">{avgExpectedDistance.toFixed(1)} km</abbr>
+    {:else}
+        {avgExpectedDistance.toFixed(1)} km
+    {/if}</b></p>
 
 <MapLibre
         bind:map={map}
@@ -197,7 +203,7 @@
                 }}>
             <Popup openOn="hover" popupClass="narrow">
                 {#snippet children({data}: { data: Feature<Point, LineProperties> | undefined })}
-                                            {@const props = data!.properties!}
+                    {@const props = data!.properties!}
                     <p>Al centro <b>{props["NOMBRE RECINTO"]}</b></p>
                     <p>{props.distance > 1 ? props.distance.toFixed(1) : Math.round(props.distance * 100) * 10} {props.distance > 1 ? "km" : "m"}</p>
                 {/snippet}
@@ -245,3 +251,21 @@
 </MapLibre>
 
 <pre>{JSON.stringify(zoneInfoAcrossElections, null, 2)}</pre>
+
+<style>
+    abbr {
+        cursor: help;
+    }
+
+    svg {
+        float: right;
+        margin-right: 100px;
+    }
+
+    @media (max-width: 1024px) {
+        svg {
+            display: block;
+            margin-right: 0;
+        }
+    }
+</style>
