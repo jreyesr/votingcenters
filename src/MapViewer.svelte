@@ -203,6 +203,7 @@
           sources: {},
           layers: [],
         }}
+            dragRotate={false}
     >
         <NavigationControl showCompass={false}/>
         <GeolocateControl showAccuracyCircle={true} bind:control={geolocateControl}/>
@@ -222,7 +223,10 @@
                 <p>{props.numCenters} centros, {props.numStations} JRVs</p>
                 {#if props.numVoters}<p>Atiende <b>{props.numVoters} votantes</b></p>{/if}
 
-                <Link class="flat" to={"/zone/" + [props.province.trim(), props.canton.trim(), props.parish.trim(), props.zone?.trim() ?? ""].join(";").replaceAll("/", "%2F")}>Estoy en esta zona</Link>
+                <Link class="flat"
+                      to={"/zone/" + [props.province.trim(), props.canton.trim(), props.parish.trim(), props.zone?.trim() ?? ""].join(";").replaceAll("/", "%2F")}>
+                    Estoy en esta zona
+                </Link>
                 <!--<button onclick={() => {
                     // focusedZone = data
                     geolocateControl?.trigger()

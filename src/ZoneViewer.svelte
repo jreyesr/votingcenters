@@ -184,6 +184,7 @@
         }}
         onload={triggerGeolocate}
         ondata={fitToLayer}
+        dragRotate={false}
 >
     <NavigationControl showCompass={false}/>
     <GeolocateControl showAccuracyCircle={true} bind:control={geolocateControl}/>
