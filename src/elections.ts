@@ -76,3 +76,5 @@ export const elections: ElectionInfo[] = [
     {value: "2025_consulta", label: "Consulta 2025", date: "2025-11-16"},
     {value: "2027_alcaldes", label: "Alcaldes 2027", tooltipRemark: "Adelantadas a noviembre/2026", date: "2026-11-29"},
 ]
+
+export const mostRecentElection = elections.findLast(e => !e.disabled)

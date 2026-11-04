@@ -5,6 +5,7 @@
   import Privacy from "./Privacy.svelte";
   import About from "./About.svelte";
   import ZoneViewer from "./ZoneViewer.svelte";
+  import OptimalZone from "./OptimalZone.svelte";
 
   let url = $state("");
 
@@ -17,9 +18,7 @@
 
 <Router {url}>
     <div>
-        <Route path="/">
-            <MapViewer/>
-        </Route>
+        <Route path="/" component={MapViewer}/>
         <Route path="/zone/:zonePath">
             {#snippet children(params)}
                 {#if params.zonePath}
@@ -27,15 +26,10 @@
                 {/if}
             {/snippet}
         </Route>
-        <Route path="/error">
-            <ReportError/>
-        </Route>
-        <Route path="/about">
-            <About/>
-        </Route>
-        <Route path="/privacy">
-            <Privacy/>
-        </Route>
+        <Route path="/optimize/:lat/:lng" component={OptimalZone}/>
+        <Route path="/error" component={ReportError}/>
+        <Route path="/about" component={About}/>
+        <Route path="/privacy" component={Privacy}/>
     </div>
 
     <nav class="bottombar">
