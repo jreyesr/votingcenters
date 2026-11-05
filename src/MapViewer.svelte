@@ -317,13 +317,18 @@
                             + {props["JUN MAS"]}M ({props["JUN INIM"]}M-{props["JUN FINM"]}M)</p>
                         {#if props["NUMERO ELECTORES"]}<p>Atiende <b>{props["NUMERO ELECTORES"]} votantes</b></p>{/if}
 
-                        <button onclick={() => {
-                        focusedCenter = data
-                        geolocateControl?.trigger()
-                    }} class="flat">Voto aquí
-                        </button>
-                        {#if distanceBetweenUserAndCenterDisplay !== undefined}
+
+                        {#if distanceBetweenUserAndCenterDisplay !== undefined && currentUserPosition !== undefined}
                             {distanceBetweenUserAndCenterDisplay} desde tu ubicación
+                            <Link to={`/optimize/${currentUserPosition.latitude}/${currentUserPosition.longitude}`} class="flat">
+                                Optimizar!
+                            </Link>
+                        {:else}
+                            <button onclick={() => {
+                                focusedCenter = data
+                                geolocateControl?.trigger()
+                            }} class="flat">Voto aquí
+                            </button>
                         {/if}
                     {/snippet}
                 </Popup>
@@ -337,7 +342,7 @@
         height: 800px;
     }
 
-    :global(a.flat) {
+    :global(a.flat, button.flat) {
         border: unset;
         border: 1px solid dodgerblue;
         color: dodgerblue;
