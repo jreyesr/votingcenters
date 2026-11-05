@@ -36,31 +36,38 @@
     type OptimalZoneInfo = {
         zoneId: string,
         province: string, canton: string, parish: string, zone: string,
-        metric: number,
-        centers: FeatureCollection<Point, VotingCenterProperties>
+        centers: FeatureCollection<Point, VotingCenterProperties>,
+        average: number, min: number, max: number,
     }
-    const optimalZone = $derived(lat !== undefined ? clusterReduce(latestElection, "ID ZONA", (prevMin: OptimalZoneInfo, cluster, zoneId) => {
+    const optimalZones = $derived(lat !== undefined ? clusterReduce(latestElection, "ID ZONA", (prevMin: OptimalZoneInfo[], cluster, zoneId) => {
         // compute the RMS sqrt(sum(dist_i)/n) of the distances, this pulls to the nearest-ish average zone but also penalizes zones that are more "spread out" i.e. larger
         const thisZoneMetric = Math.sqrt(1 / cluster.features.length * featureReduce(cluster, (acc, center) => acc + Math.pow(distance([lng, lat], center), 2), 0))
-        if (thisZoneMetric < prevMin.metric) {
-            return {
+        if (prevMin.length === 0 || thisZoneMetric < prevMin[prevMin.length - 1].average) {
+            const zoneToInsert = {
                 zoneId,
                 province: cluster.features[0].properties.PROVINCIA,
                 canton: cluster.features[0].properties.CANTON,
                 parish: cluster.features[0].properties.PARROQUIA,
                 zone: cluster.features[0].properties.ZONA,
-                metric: thisZoneMetric, centers: cluster
+                centers: cluster,
+                average: featureReduce(cluster, (acc, center) => acc + distance([lng, lat], center) / cluster.features.length, 0),
+                min: featureReduce(cluster, (acc, center) => Math.min(acc, distance([lng, lat], center)), Infinity),
+                max: featureReduce(cluster, (acc, center) => Math.max(acc, distance([lng, lat], center)), 0),
             }
+            return [...prevMin, zoneToInsert].toSorted((a, b) => a.average - b.average).slice(0, 5)
         } else {
             return prevMin
         }
-    }, {metric: Infinity}) as unknown as OptimalZoneInfo : undefined)
+    }, []) as unknown as OptimalZoneInfo[] : undefined)
+    let currentlyDisplayedZoneIndex = $state<number>(0)
+    const optimalZone = $derived(optimalZones?.[0])
+    const currentlyDisplayedZone = $derived(optimalZones?.[currentlyDisplayedZoneIndex])
 
     let map = $state<maplibregl.Map>()
 
     function fitToLayer() {
-        if (optimalZone && map && currentUserPosition) {
-            const centersBbox = bbox(optimalZone.centers) as [number, number, number, number]
+        if (currentlyDisplayedZone && map && currentUserPosition) {
+            const centersBbox = bbox(currentlyDisplayedZone.centers) as [number, number, number, number]
 
             map!.fitBounds([
                 Math.min(centersBbox[0], currentUserPosition.longitude),
@@ -98,9 +105,8 @@
         }
     })
 
-
-    const linesToOptimalCenters = $derived(currentUserPosition && optimalZone
-        ? featureCollection(optimalZone.centers.features
+    const linesToOptimalCenters = $derived(currentUserPosition && currentlyDisplayedZone
+        ? featureCollection(currentlyDisplayedZone.centers.features
             .map(center => lineString([center.geometry.coordinates, [currentUserPosition!.longitude, currentUserPosition!.latitude]], {...center.properties}))
             .map(centerLine => ({
                 ...centerLine,
@@ -117,7 +123,37 @@
 <h1>El Optimizador</h1>
 
 {#if optimalZone}
-    <p>La zona óptima es {optimalZone.province} > {optimalZone.canton} > {optimalZone.parish} > {optimalZone.zone}</p>
+    <p>La zona óptima es {optimalZone.province} > {optimalZone.canton} > {optimalZone.parish} > {optimalZone.zone}
+        ({optimalZone.average.toFixed(2)} km en promedio)</p>
+
+    <details>
+        <summary>Mejores alternativas</summary>
+
+        <ol>
+            {#each optimalZones as z, i}
+                <li>{z.province} > {z.canton} > {z.parish} > {z.zone} ({z.average.toFixed(2)} km en
+                    promedio, {z.centers.features.length} centros)
+                    {#if i !== currentlyDisplayedZoneIndex}<a href="#"
+                                                              onclick={() => {currentlyDisplayedZoneIndex = i}}>Ver</a>{/if}
+                </li>
+            {/each}
+        </ol>
+    </details>
+
+    <details>
+        <summary>¿Por qué?</summary>
+
+        <ul>
+            <li>Porque lo dice El Optimizador&trade;</li>
+            <li>La distancia promedio a los centros de esta zona es de {optimalZone.average.toFixed(2)} km
+                (entre {optimalZone.min.toFixed(1)} km y {optimalZone.max.toFixed(1)} km)
+            </li>
+            <li>Esta es la mínima distancia promedio entre todas las zonas del país</li>
+            <li>Aplica para el proceso electoral {mostRecentElection?.label}, otras elecciones (pasadas y futuras)
+                tendrán un conjunto diferente de recintos y por lo tanto podría ser que otra zona sea preferible
+            </li>
+        </ul>
+    </details>
 
     <MapLibre
             bind:map={map}
