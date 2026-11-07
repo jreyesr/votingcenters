@@ -267,12 +267,12 @@
         <!-- line joining the center with its popup open to the user's current geolocation -->
         <GeoJSON data={lineBetweenUserAndCenter}>
             <LineLayer
-                    layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-                    paint={{
-                    'line-width': 4,
-                    'line-color': '#008800',
-                    'line-opacity': 1,
-                }}/>
+                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                paint={{
+                'line-width': 4,
+                'line-color': '#008800',
+                'line-opacity': 1,
+            }}/>
         </GeoJSON>
 
         <GeoJSON data={chosenElectionData as GeoJSONType} promoteId="CODIGO RECINTO">

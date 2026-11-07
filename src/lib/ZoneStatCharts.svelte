@@ -142,7 +142,6 @@
         },
         series: [...centerOrdersAcrossElections.entries()].map(([centerName, orders]) => makeSeriesOneCenter(centerName, orders)),
     })
-    $inspect(new Set(Array.from(centerOrdersAcrossElections.keys()).flat()))
 </script>
 
 <div style:height={(maxNumberOfCenters <= 30 ? 50 * maxNumberOfCenters : 1600) + "px"} style="margin-block-end: 30px;">

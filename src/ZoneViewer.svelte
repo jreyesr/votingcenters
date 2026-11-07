@@ -12,6 +12,7 @@
         LineLayer,
         MapLibre, NavigationControl, Popup,
         ScaleControl,
+        SymbolLayer,
     } from "svelte-maplibre";
     import BasemapSwitcherControl from "./lib/BasemapSwitcherControl.svelte";
     import {featureCollection, lineString, lineStrings} from "@turf/helpers";
@@ -60,7 +61,7 @@
     const firstAppearanceKey = $derived(Object.entries(zoneInfoAcrossElections).find(([_, e]) => e.numCenters > 0)![0])
     const firstAppearance = $derived(elections.find(e => e.value === firstAppearanceKey)!)
     const lastInfoAcrossElections = $derived(Object.values(zoneInfoAcrossElections).findLast(e => e.numCenters > 0)!)
-    const lastActiveCenters = $derived(featureCollection<Point>(lastInfoAcrossElections.centers!))
+    const lastActiveCenters = $derived(featureCollection(lastInfoAcrossElections.centers!))
 
     function fitToLayer(e: maplibregl.MapSourceDataEvent | maplibregl.MapStyleDataEvent) {
         if (e.dataType === "style" || e.sourceDataType !== "content" || e.sourceId !== "votingCenters") return
@@ -72,6 +73,17 @@
                 maxZoom: 15
             })
         }
+    }
+
+    function onmapload() {
+        loadArrowSymbol()
+        triggerGeolocate()
+    }
+
+    function loadArrowSymbol() {
+        map!.loadImage("/triangle.sdf.png").then(img => {
+            map!.addImage('triangle', img.data, {sdf: true});
+        })
     }
 
     let geolocateControl = $state<maplibregl.GeolocateControl>()
@@ -107,6 +119,11 @@
                 }
             })))
         : lineStrings<LineProperties>([]))
+    const lineConnectingCentersInOrder = $derived(lastActiveCenters ?
+        lineString(lastActiveCenters.features
+            .toSorted((a, b) => a.properties['JUN INIF'] && b.properties['JUN INIF'] ? a.properties['JUN INIF'] - b.properties['JUN INIF'] : a.properties['JUN INIM'] - b.properties['JUN INIM'])
+            .map(c => c.geometry.coordinates))
+        : lineString([]))
     const rangeOfDistances = $derived(linesToAllCenters.features.length ? {
         min: Math.min(Infinity, ...linesToAllCenters.features.map(c => c.properties.distance)),
         max: Math.max(0, ...linesToAllCenters.features.map(c => c.properties.distance)),
@@ -195,7 +212,7 @@
           sources: {},
           layers: [],
         }}
-        onload={triggerGeolocate}
+        onload={onmapload}
         ondata={fitToLayer}
         dragRotate={false}
 >
@@ -223,6 +240,27 @@
                 {/snippet}
             </Popup>
         </LineLayer>
+    </GeoJSON>
+
+    <GeoJSON data={lineConnectingCentersInOrder}>
+        <LineLayer layout={{
+            'line-cap': 'round', 'line-join': 'round'
+        }} paint={{
+                'line-width': 2,
+                'line-color': "blue",
+                'line-opacity': 0.8,
+        }}/>
+        <SymbolLayer layout={{
+            "symbol-placement": "line",
+            "symbol-spacing": 50,
+            "icon-allow-overlap": false,
+            "icon-image": "triangle",
+            "icon-size": 0.25,
+            "visibility": "visible"
+        }} paint={{
+            "icon-color": "blue",
+            "icon-halo-blur": 2,
+        }}/>
     </GeoJSON>
 
     <GeoJSON id="votingCenters" data={lastActiveCenters} promoteId="CODIGO RECINTO">
