@@ -19,6 +19,7 @@
     import bbox from "@turf/bbox";
     import {distance} from "@turf/distance";
     import {Link} from 'svelte5-router';
+    import ZoneStatCharts from "./lib/ZoneStatCharts.svelte";
 
     const activeElections = $derived(elections.filter(e => e.disabled === undefined))
 
@@ -58,7 +59,8 @@
         (await zoneInfoAcrossElectionsPromise).map((zoneCenters, i) => ([activeElections[i].value, zoneCenters]))))
     const firstAppearanceKey = $derived(Object.entries(zoneInfoAcrossElections).find(([_, e]) => e.numCenters > 0)![0])
     const firstAppearance = $derived(elections.find(e => e.value === firstAppearanceKey)!)
-    const lastActiveCenters = $derived(featureCollection<Point>(Object.values(zoneInfoAcrossElections).findLast(e => e.numCenters > 0)!.centers!))
+    const lastInfoAcrossElections = $derived(Object.values(zoneInfoAcrossElections).findLast(e => e.numCenters > 0)!)
+    const lastActiveCenters = $derived(featureCollection<Point>(lastInfoAcrossElections.centers!))
 
     function fitToLayer(e: maplibregl.MapSourceDataEvent | maplibregl.MapStyleDataEvent) {
         if (e.dataType === "style" || e.sourceDataType !== "content" || e.sourceId !== "votingCenters") return
@@ -163,6 +165,9 @@
     Cantón: {Object.values(zoneInfoAcrossElections)[0].canton} >
     Parroquia: {Object.values(zoneInfoAcrossElections)[0].parish}</p>
 
+<p>En la última elección atendió {lastInfoAcrossElections.numVoters} electores en {lastInfoAcrossElections.numCenters}
+    recintos ({lastInfoAcrossElections.numStations} JRVs)</p>
+
 <p>Entre {rangeOfDistances.min.toFixed(1)} y {rangeOfDistances.max.toFixed(1)} km desde la posición actual</p>
 <p>Distancia promedio esperada: <b>
     {#if hasNumberOfElectorsInfo}<abbr
@@ -175,6 +180,8 @@
         <Link to={`/optimize/${currentUserPosition.latitude}/${currentUserPosition.longitude}`}>Optimizar!</Link>
     {/if}
 </p>
+
+<ZoneStatCharts zoneDataAcrossElections={zoneInfoAcrossElections}/>
 
 <MapLibre
         bind:map={map}
@@ -253,11 +260,7 @@
             </Popup>
         </CircleLayer>
     </GeoJSON>
-
-
 </MapLibre>
-
-<pre>{JSON.stringify(zoneInfoAcrossElections, null, 2)}</pre>
 
 <style>
     abbr {
