@@ -174,7 +174,7 @@
 
 <h1>Recintos electorales a través de la historia</h1>
 
-<small>(es decir, a través de los últimos tres años)</small>
+<small>(es decir, a través de los últimos diez años aprox.)</small>
 
 <div style="padding-bottom: 20px;">
     <TimelineRadio
