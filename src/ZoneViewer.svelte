@@ -21,6 +21,7 @@
     import {distance} from "@turf/distance";
     import {Link} from 'svelte5-router';
     import ZoneStatCharts from "./lib/ZoneStatCharts.svelte";
+    import ZoneViewerExtraControls from "./lib/ZoneViewerExtraControls.svelte";
 
     const activeElections = $derived(elections.filter(e => e.disabled === undefined))
 
@@ -108,6 +109,8 @@
     })
 
     type LineProperties = VotingCenterProperties & { distance: number }
+    let displayLinesToAllCenters = $state(true)
+    let displayOrderArrows = $state(true)
     const linesToAllCenters = $derived(currentUserPosition && lastActiveCenters
         ? featureCollection(lastActiveCenters.features
             .map(center => lineString([center.geometry.coordinates, [currentUserPosition!.longitude, currentUserPosition!.latitude]], {...center.properties}))
@@ -198,7 +201,10 @@
     {/if}
 </p>
 
-<ZoneStatCharts zoneDataAcrossElections={zoneInfoAcrossElections}/>
+<details>
+    <summary>Ver evolución de los centros</summary>
+    <ZoneStatCharts zoneDataAcrossElections={zoneInfoAcrossElections}/>
+</details>
 
 <MapLibre
         bind:map={map}
@@ -222,46 +228,51 @@
     <ScaleControl/>
 
     <BasemapSwitcherControl/>
+    <ZoneViewerExtraControls bind:linesToCenters={displayLinesToAllCenters} bind:orderArrows={displayOrderArrows}/>
 
-    <GeoJSON data={linesToAllCenters} promoteId="ID RECINTO">
-        <LineLayer
-                hoverCursor="help"
-                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-                paint={{
+    {#if displayLinesToAllCenters}
+        <GeoJSON data={linesToAllCenters} promoteId="ID RECINTO">
+            <LineLayer
+                    hoverCursor="help"
+                    layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                    paint={{
                     'line-width': 4,
                     'line-color': '#008800',
                     'line-opacity': 1,
                 }}>
-            <Popup openOn="hover" popupClass="narrow">
-                {#snippet children({data}: { data: Feature<Point, LineProperties> | undefined })}
-                    {@const props = data!.properties!}
-                    <p>Al centro <b>{props["NOMBRE RECINTO"]}</b></p>
-                    <p>{props.distance > 1 ? props.distance.toFixed(1) : Math.round(props.distance * 100) * 10} {props.distance > 1 ? "km" : "m"}</p>
-                {/snippet}
-            </Popup>
-        </LineLayer>
-    </GeoJSON>
+                <Popup openOn="hover" popupClass="narrow">
+                    {#snippet children({data}: { data: Feature<Point, LineProperties> | undefined })}
+                        {@const props = data!.properties!}
+                        <p>Al centro <b>{props["NOMBRE RECINTO"]}</b></p>
+                        <p>{props.distance > 1 ? props.distance.toFixed(1) : Math.round(props.distance * 100) * 10} {props.distance > 1 ? "km" : "m"}</p>
+                    {/snippet}
+                </Popup>
+            </LineLayer>
+        </GeoJSON>
+    {/if}
 
-    <GeoJSON data={lineConnectingCentersInOrder}>
-        <LineLayer layout={{
-            'line-cap': 'round', 'line-join': 'round'
-        }} paint={{
-                'line-width': 2,
-                'line-color': "blue",
-                'line-opacity': 0.8,
-        }}/>
-        <SymbolLayer layout={{
-            "symbol-placement": "line",
-            "symbol-spacing": 50,
-            "icon-allow-overlap": false,
-            "icon-image": "triangle",
-            "icon-size": 0.25,
-            "visibility": "visible"
-        }} paint={{
-            "icon-color": "blue",
-            "icon-halo-blur": 2,
-        }}/>
-    </GeoJSON>
+    {#if displayOrderArrows}
+        <GeoJSON data={lineConnectingCentersInOrder}>
+            <LineLayer layout={{
+                'line-cap': 'round', 'line-join': 'round'
+            }} paint={{
+                    'line-width': 2,
+                    'line-color': "blue",
+                    'line-opacity': 0.8,
+            }}/>
+            <SymbolLayer layout={{
+                "symbol-placement": "line",
+                "symbol-spacing": 50,
+                "icon-allow-overlap": false,
+                "icon-image": "triangle",
+                "icon-size": 0.25,
+                "visibility": "visible"
+            }} paint={{
+                "icon-color": "blue",
+                "icon-halo-blur": 2,
+            }}/>
+        </GeoJSON>
+    {/if}
 
     <GeoJSON id="votingCenters" data={lastActiveCenters} promoteId="CODIGO RECINTO">
         <CircleLayer
