@@ -48,7 +48,8 @@
     import corrections from './data/corrections.json' with {type: "json"}
     import type {ExpressionFilterSpecification} from "maplibre-gl";
     import LoadingAnimation from "./lib/LoadingAnimation.svelte";
-    import {elections, type VotingCenterProperties, type ZoneInfo, type ZoneProperties} from "./elections";
+    import {type VotingCenterProperties, type ZoneInfo, type ZoneProperties} from "./elections";
+    import ElectionSelector from "./lib/ElectionSelector.svelte";
 
     // NOTE the import(...) below MUST use backticks `path/${filename}.json`, NOT "path/" + filename + ".json" or other forms of creating the import path
     // Vite does some kind of analysis of backtick dynamic imports and rewrites them to an object lookup taking into account all the files that exist in that directory
@@ -176,13 +177,7 @@
 
 <small>(es decir, a través de los últimos diez años aprox.)</small>
 
-<div style="padding-bottom: 20px;">
-    <TimelineRadio
-            options={elections}
-            color="gray"
-            bind:value={chosenElection}
-    />
-</div>
+<ElectionSelector bind:value={chosenElection}/>
 
 <div style="position: relative; min-height: 100px;">
     {#if $effect.pending()}
@@ -267,8 +262,8 @@
         <!-- line joining the center with its popup open to the user's current geolocation -->
         <GeoJSON data={lineBetweenUserAndCenter}>
             <LineLayer
-                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-                paint={{
+                    layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+                    paint={{
                 'line-width': 4,
                 'line-color': '#008800',
                 'line-opacity': 1,
@@ -320,7 +315,8 @@
 
                         {#if distanceBetweenUserAndCenterDisplay !== undefined && currentUserPosition !== undefined}
                             {distanceBetweenUserAndCenterDisplay} desde tu ubicación
-                            <Link to={`/optimize/${currentUserPosition.latitude}/${currentUserPosition.longitude}`} class="flat">
+                            <Link to={`/optimize/${currentUserPosition.latitude}/${currentUserPosition.longitude}`}
+                                  class="flat">
                                 Optimizar!
                             </Link>
                         {:else}

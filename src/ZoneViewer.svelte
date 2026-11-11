@@ -24,6 +24,7 @@
     import ZoneViewerExtraControls from "./lib/ZoneViewerExtraControls.svelte";
     import letterQuantiles from './data/letter_quantiles.json'
     import corrections from "./data/corrections.json";
+    import ElectionSelector from "./lib/ElectionSelector.svelte";
 
     const activeElections = $derived(elections.filter(e => e.disabled === undefined))
 
@@ -33,6 +34,7 @@
 
     type HistoricZoneInfo = ZoneInfo & {
         electionDate: string
+        electionKey: string
     }
 
     let map = $state<maplibregl.Map>()
@@ -106,7 +108,8 @@
             zone: zonePath[3],
             numCenters: thisZoneCenters.length,
             numVoters, numStations,
-            electionDate: election.date!
+            electionDate: election.date!,
+            electionKey: election.value,
         }
     }
 
@@ -115,12 +118,15 @@
         (await zoneInfoAcrossElectionsPromise).filter(x => x !== undefined).map((zoneCenters, i) => ([activeElections[i].value, zoneCenters]))))
     const firstAppearanceKey = $derived(Object.entries(zoneInfoAcrossElections).find(([_, e]) => e.numCenters > 0)![0])
     const firstAppearance = $derived(elections.find(e => e.value === firstAppearanceKey)!)
-    const lastInfoAcrossElections = $derived(Object.values(zoneInfoAcrossElections).findLast(e => e.numCenters > 0)!)
-    const lastActiveCenters = $derived(featureCollection(lastInfoAcrossElections.centers!))
+
+    let chosenElection = $state("2027_alcaldes")
+    const chosenElectionInfo = $derived(elections.find(e => e.value === chosenElection))
+    const infoInChosenElection = $derived(Object.values(zoneInfoAcrossElections).find(e => e.electionKey === chosenElection))
+    const activeCentersInChosenElection = $derived(featureCollection(infoInChosenElection?.centers ?? []))
 
     function fitToLayer(e: maplibregl.MapSourceDataEvent | maplibregl.MapStyleDataEvent) {
         if (e.dataType === "style" || e.sourceDataType !== "content" || e.sourceId !== "votingCenters") return
-        const sourceData = (e.source as maplibregl.GeoJSONSourceSpecification).data as typeof lastActiveCenters
+        const sourceData = (e.source as maplibregl.GeoJSONSourceSpecification).data as typeof activeCentersInChosenElection
         if (sourceData.features.length > 0) {
             map!.fitBounds(bbox(sourceData) as [number, number, number, number], {
                 padding: 40,
@@ -165,8 +171,8 @@
     type LineProperties = VotingCenterProperties & { distance: number }
     let displayLinesToAllCenters = $state(true)
     let displayOrderArrows = $state(true)
-    const linesToAllCenters = $derived(currentUserPosition && lastActiveCenters
-        ? featureCollection(lastActiveCenters.features
+    const linesToAllCenters = $derived(currentUserPosition && activeCentersInChosenElection
+        ? featureCollection(activeCentersInChosenElection.features
             .map(center => lineString([center.geometry.coordinates, [currentUserPosition!.longitude, currentUserPosition!.latitude]], {...center.properties}))
             .map(centerLine => ({
                 ...centerLine,
@@ -176,8 +182,8 @@
                 }
             })))
         : lineStrings<LineProperties>([]))
-    const lineConnectingCentersInOrder = $derived(lastActiveCenters?.features.length >= 2 ?
-        lineString(lastActiveCenters.features
+    const lineConnectingCentersInOrder = $derived(activeCentersInChosenElection?.features.length >= 2 ?
+        lineString(activeCentersInChosenElection.features
             .map(c => c.geometry.coordinates))
         : undefined)
     const rangeOfDistances = $derived(linesToAllCenters.features.length ? {
@@ -238,17 +244,18 @@
     Cantón: {Object.values(zoneInfoAcrossElections)[0].canton} >
     Parroquia: {Object.values(zoneInfoAcrossElections)[0].parish}</p>
 
-<p>En la última elección atendió {lastInfoAcrossElections.numVoters} electores en {lastInfoAcrossElections.numCenters}
-    recintos ({lastInfoAcrossElections.numStations} JRVs)</p>
+<p>En la elección <b>{chosenElectionInfo.label}</b> atendió {infoInChosenElection.numVoters} electores
+    en {infoInChosenElection.numCenters}
+    recintos ({infoInChosenElection.numStations} JRVs)</p>
 
-<p>Entre {rangeOfDistances.min.toFixed(1)} y {rangeOfDistances.max.toFixed(1)} km desde la posición actual</p>
-<p>Distancia promedio esperada: <b>
-    {#if hasNumberOfElectorsInfo}<abbr
-            title="Considerando la cantidad de electores en cada recinto">{avgExpectedDistance.toFixed(1)} km</abbr>
-    {:else}
-        {avgExpectedDistance.toFixed(1)} km
-    {/if}
-</b>
+<p>Entre {rangeOfDistances.min.toFixed(1)} y {rangeOfDistances.max.toFixed(1)} km desde la posición actual. Distancia
+    promedio esperada: <b>
+        {#if hasNumberOfElectorsInfo}<abbr
+                title="Considerando la cantidad de electores en cada recinto">{avgExpectedDistance.toFixed(1)} km</abbr>
+        {:else}
+            {avgExpectedDistance.toFixed(1)} km
+        {/if}
+    </b>
     {#if currentUserPosition}
         <Link to={`/optimize/${currentUserPosition.latitude}/${currentUserPosition.longitude}`}>Optimizar!</Link>
     {/if}
@@ -258,6 +265,8 @@
     <summary>Ver evolución de los centros</summary>
     <ZoneStatCharts zoneDataAcrossElections={zoneInfoAcrossElections}/>
 </details>
+
+<ElectionSelector bind:value={chosenElection}/>
 
 <MapLibre
         bind:map={map}
@@ -327,7 +336,7 @@
         </GeoJSON>
     {/if}
 
-    <GeoJSON id="votingCenters" data={lastActiveCenters} promoteId="CODIGO RECINTO">
+    <GeoJSON id="votingCenters" data={activeCentersInChosenElection} promoteId="CODIGO RECINTO">
         <CircleLayer
                 eventsIfTopMost
                 paint={{
