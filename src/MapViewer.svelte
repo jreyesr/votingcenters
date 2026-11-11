@@ -355,7 +355,7 @@
     }
 
     :global(.maplibregl-popup.narrow) {
-        max-width: 300px;
+        max-width: 350px;
     }
 
     div.loadingOverlay {

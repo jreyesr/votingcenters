@@ -22,6 +22,8 @@
     import {Link} from 'svelte5-router';
     import ZoneStatCharts from "./lib/ZoneStatCharts.svelte";
     import ZoneViewerExtraControls from "./lib/ZoneViewerExtraControls.svelte";
+    import letterQuantiles from './data/letter_quantiles.json'
+    import corrections from "./data/corrections.json";
 
     const activeElections = $derived(elections.filter(e => e.disabled === undefined))
 
@@ -35,30 +37,82 @@
 
     let map = $state<maplibregl.Map>()
 
-    async function zoneInfoInElection(election: ElectionInfo, zonePath: string[]): Promise<HistoricZoneInfo> {
+    function quantileToLetter(province: string, q: number): [string, string] {
+        const thisProvinceQuantiles = (letterQuantiles as unknown as Record<string, [string, number][]>)[province]
+        return [
+            thisProvinceQuantiles.findLast(x => x[1] <= q)?.[0] ?? thisProvinceQuantiles[0][0],
+            thisProvinceQuantiles.find(x => x[1] >= q)?.[0] ?? thisProvinceQuantiles[thisProvinceQuantiles.length - 1][0],
+        ]
+    }
+
+    async function zoneInfoInElection(election: ElectionInfo, zonePath: string[]): Promise<HistoricZoneInfo | undefined> {
         const data = (await import(`./data/${election.value}.json`)).default as FeatureCollection<Point, VotingCenterProperties>
-        const thisZoneCenters = data.features.filter(f =>
-            f.properties["PROVINCIA"].trim() === zonePath[0]
-            && f.properties["CANTON"].trim() === zonePath[1]
-            && f.properties["PARROQUIA"].trim() === zonePath[2]
-            && (f.properties["ZONA"] ?? "").trim() == zonePath[3])
+        const thisZoneCenters = data.features
+            .filter(f =>
+                f.properties["PROVINCIA"].trim() === zonePath[0]
+                && f.properties["CANTON"].trim() === zonePath[1]
+                && f.properties["PARROQUIA"].trim() === zonePath[2]
+                && (f.properties["ZONA"] ?? "").trim() == zonePath[3])
+            .toSorted((a, b) => a.properties['JUN INIF'] && b.properties['JUN INIF']
+                ? a.properties['JUN INIF'] - b.properties['JUN INIF']
+                : a.properties['JUN INIM'] - b.properties['JUN INIM'])
+        thisZoneCenters.forEach(c => {
+            if (c.properties["CODIGO RECINTO"].toString() in corrections)
+                (c.geometry as Point).coordinates = (corrections as Record<string, number[]>)[c.properties["CODIGO RECINTO"]]
+        })
+        if (!thisZoneCenters.length) return
+
+        const province = thisZoneCenters[0].properties.PROVINCIA.trim()
+        const numVoters = thisZoneCenters.reduce((acc, c) => acc + (c.properties["NUMERO ELECTORES"] ?? 0), 0)
+        const numStations = thisZoneCenters.reduce((acc, c) => acc + c.properties["NUM JUNR"], 0),
+            numStationsF = thisZoneCenters.reduce((acc, c) => acc + c.properties["JUN FEM"], 0),
+            numStationsM = thisZoneCenters.reduce((acc, c) => acc + c.properties["JUN MAS"], 0)
+        const totalVoters = numVoters || numStations
+        const numVotersF = totalVoters * numStationsF / numStations,
+            numVotersM = totalVoters * numStationsM / numStations;
+        let accumVotersF = 0, accumVotersM = 0
+        thisZoneCenters.forEach(c => {
+            const votersHere = c.properties["NUMERO ELECTORES"] || (c.properties["JUN FEM"] + c.properties["JUN MAS"])
+            const votersPerStation = votersHere / c.properties["NUM JUNR"]
+            const startQuantileF = accumVotersF / numVotersF,
+                startQuantileM = accumVotersM / numVotersM
+            accumVotersF += Math.trunc(votersPerStation * c.properties["JUN FEM"])
+            accumVotersM += Math.trunc(votersPerStation * c.properties["JUN MAS"])
+            const endQuantileF = accumVotersF / numVotersF,
+                endQuantileM = accumVotersM / numVotersM
+            // @ts-expect-error
+            c.properties.startQuantileF = startQuantileF
+            // @ts-expect-error
+            c.properties.endQuantileF = endQuantileF
+            // @ts-expect-error
+            c.properties.startLetterApproxF = quantileToLetter(province, startQuantileF)[0]
+            // @ts-expect-error
+            c.properties.endLetterApproxF = quantileToLetter(province, endQuantileF)[0]
+            // @ts-expect-error
+            c.properties.startQuantileM = startQuantileM
+            // @ts-expect-error
+            c.properties.endQuantileM = endQuantileM
+            // @ts-expect-error
+            c.properties.startLetterApproxM = quantileToLetter(province, startQuantileM)[1]
+            // @ts-expect-error
+            c.properties.endLetterApproxM = quantileToLetter(province, endQuantileM)[1]
+        })
         return {
-            centers: thisZoneCenters,
+            centers: thisZoneCenters as HistoricZoneInfo["centers"],
             id: thisZoneCenters[0]?.properties["ID ZONA"],
             province: zonePath[0],
             canton: zonePath[1],
             parish: zonePath[2],
             zone: zonePath[3],
             numCenters: thisZoneCenters.length,
-            numVoters: thisZoneCenters.reduce((acc, c) => acc + (c.properties["NUMERO ELECTORES"] ?? 0), 0),
-            numStations: thisZoneCenters.reduce((acc, c) => acc + c.properties["NUM JUNR"], 0),
+            numVoters, numStations,
             electionDate: election.date!
         }
     }
 
     const zoneInfoAcrossElectionsPromise = $derived(Promise.all(activeElections.map(e => zoneInfoInElection(e, zonePath))))
     const zoneInfoAcrossElections = $derived(Object.fromEntries(
-        (await zoneInfoAcrossElectionsPromise).map((zoneCenters, i) => ([activeElections[i].value, zoneCenters]))))
+        (await zoneInfoAcrossElectionsPromise).filter(x => x !== undefined).map((zoneCenters, i) => ([activeElections[i].value, zoneCenters]))))
     const firstAppearanceKey = $derived(Object.entries(zoneInfoAcrossElections).find(([_, e]) => e.numCenters > 0)![0])
     const firstAppearance = $derived(elections.find(e => e.value === firstAppearanceKey)!)
     const lastInfoAcrossElections = $derived(Object.values(zoneInfoAcrossElections).findLast(e => e.numCenters > 0)!)
@@ -122,11 +176,10 @@
                 }
             })))
         : lineStrings<LineProperties>([]))
-    const lineConnectingCentersInOrder = $derived(lastActiveCenters ?
+    const lineConnectingCentersInOrder = $derived(lastActiveCenters?.features.length >= 2 ?
         lineString(lastActiveCenters.features
-            .toSorted((a, b) => a.properties['JUN INIF'] && b.properties['JUN INIF'] ? a.properties['JUN INIF'] - b.properties['JUN INIF'] : a.properties['JUN INIM'] - b.properties['JUN INIM'])
             .map(c => c.geometry.coordinates))
-        : lineString([]))
+        : undefined)
     const rangeOfDistances = $derived(linesToAllCenters.features.length ? {
         min: Math.min(Infinity, ...linesToAllCenters.features.map(c => c.properties.distance)),
         max: Math.max(0, ...linesToAllCenters.features.map(c => c.properties.distance)),
@@ -302,8 +355,19 @@
 
                     <p>Prov: {props["PROVINCIA"]} > Cant: {props["CANTON"]} > Parr: {props["PARROQUIA"]} >
                         Zona: {props["ZONA"] || "(sin nombre)"}</p>
-                    <p>{props["NUM JUNR"]} JRVs, {props["JUN FEM"]}F ({props["JUN INIF"]}F-{props["JUN FINF"]}F)
-                        + {props["JUN MAS"]}M ({props["JUN INIM"]}M-{props["JUN FINM"]}M)</p>
+                    <p>{props["NUM JUNR"]} JRVs:</p>
+                    <ul>
+                        <li>{props["JUN FEM"]}F
+                            {#if props["JUN FEM"]}({props["JUN INIF"]}F-{props["JUN FINF"]}F, aprox.
+                                apellidos {props.startLetterApproxF}... a {props.endLetterApproxF}...)
+                            {/if}
+                        </li>
+                        <li>{props["JUN MAS"]}M
+                            {#if props["JUN MAS"]}({props["JUN INIM"]}M-{props["JUN FINM"]}M, aprox.
+                                apellidos {props.startLetterApproxM}... a {props.endLetterApproxM}...)
+                            {/if}
+                        </li>
+                    </ul>
                     {#if props["NUMERO ELECTORES"]}<p>Atiende <b>{props["NUMERO ELECTORES"]} votantes</b></p>{/if}
                 {/snippet}
             </Popup>

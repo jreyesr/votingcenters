@@ -123,11 +123,11 @@
 <h1>El Optimizador</h1>
 
 {#if optimalZone}
-    <p>La zona óptima es {optimalZone.province} > {optimalZone.canton} > {optimalZone.parish} > {optimalZone.zone}
+    <p>La zona óptima desde tu ubicación actual es {optimalZone.province} > {optimalZone.canton} > {optimalZone.parish} > {optimalZone.zone}
         ({optimalZone.average.toFixed(2)} km en promedio)</p>
 
     <details>
-        <summary>Mejores alternativas</summary>
+        <summary>Ver alternativas</summary>
 
         <ol>
             {#each optimalZones as z, i}
