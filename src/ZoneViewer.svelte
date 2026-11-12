@@ -25,6 +25,7 @@
     import letterQuantiles from './data/letter_quantiles.json'
     import corrections from "./data/corrections.json";
     import ElectionSelector from "./lib/ElectionSelector.svelte";
+    import FamilyNameInputControl from "./lib/FamilyNameInputControl.svelte";
 
     const activeElections = $derived(elections.filter(e => e.disabled === undefined))
 
@@ -195,6 +196,19 @@
     const totalElectors = $derived(linesToAllCenters.features.reduce((acc, c) => acc + (c.properties['NUMERO ELECTORES'] ?? 1), 0))
     // Average of distance between current location and all centers, weighted by the number of electors in each (if available)
     const avgExpectedDistance = $derived(linesToAllCenters.features.reduce((acc, c) => acc + c.properties.distance * (c.properties['NUMERO ELECTORES'] ?? 1), 0) / totalElectors)
+
+    let focusedFamilyName = $state(""), focusedKind = $state<"F" | "M">("F")
+    const centerIDsForFocusedFamilyName = $derived.by(() => {
+        if (!focusedFamilyName) return [];
+
+        const firstCenterThatHandles = activeCentersInChosenElection.features.findLastIndex(c => c.properties[("startLetterApprox" + focusedKind) as keyof (typeof c)["properties"]]! <= focusedFamilyName.slice(0, 3))
+        const lastCenterThatHandles = activeCentersInChosenElection.features.findIndex(c => c.properties[("endLetterApprox" + focusedKind) as keyof (typeof c)["properties"]]! >= focusedFamilyName.slice(0, 3) + "ZZZ")
+        return activeCentersInChosenElection.features
+            .slice(
+                firstCenterThatHandles === -1 ? 0 : firstCenterThatHandles,
+                lastCenterThatHandles == -1 ? activeCentersInChosenElection.features.length : lastCenterThatHandles + 1)
+            .map(c => c.properties["CODIGO RECINTO"])
+    })
 </script>
 
 <svg style="max-width:200px; overflow: visible;"
@@ -291,6 +305,7 @@
 
     <BasemapSwitcherControl/>
     <ZoneViewerExtraControls bind:linesToCenters={displayLinesToAllCenters} bind:orderArrows={displayOrderArrows}/>
+    <FamilyNameInputControl bind:familyName={focusedFamilyName} bind:kind={focusedKind}/>
 
     {#if displayLinesToAllCenters}
         <GeoJSON data={linesToAllCenters} promoteId="ID RECINTO">
@@ -349,11 +364,10 @@
                 13, 10,
             ],
             'circle-stroke-width': [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                12, 0,
-                13, 1.5,
+                "case",
+                ["in", ["id"], ["literal", centerIDsForFocusedFamilyName ?? []]],
+                4,
+                focusedFamilyName ? 0 : 1.5
             ],
         }}
                 hoverCursor="context-menu">

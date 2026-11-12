@@ -345,7 +345,6 @@
         padding: 2px 6px;
         cursor: pointer;
         font-size: 1.2em;
-        border-radius: 4px;
         background-color: unset;
         text-decoration: unset;
     }
