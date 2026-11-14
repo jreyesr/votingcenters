@@ -141,7 +141,7 @@
             max: maxNumberOfCenters
         },
         series: [...centerOrdersAcrossElections.entries()].map(([centerName, orders]) => makeSeriesOneCenter(centerName, orders)),
-    })
+    } satisfies EChartsOption)
 </script>
 
 <div style:height={(maxNumberOfCenters <= 30 ? 50 * maxNumberOfCenters : 1600) + "px"} style="margin-block-end: 30px;">

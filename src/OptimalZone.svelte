@@ -20,6 +20,7 @@
     import {featureCollection, lineString, lineStrings} from "@turf/helpers";
     import bbox from "@turf/bbox";
     import {type ParetoFrontier, recordOnFrontier} from "./pareto";
+    import ParetoChart from "./lib/ParetoChart.svelte";
 
     const {lat, lng}: { lat: number, lng: number } = $props()
 
@@ -134,7 +135,8 @@
 
         <ol>
             {#each optimalZones?.frontier as z, i}
-                <li>{z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}±{z.stddev.toFixed(2)}
+                <li>{z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}
+                    ±{z.stddev.toFixed(2)}
                     km, {z.centers.features.length} centros)
                     {#if i !== currentlyDisplayedZoneIndex}
                         <button class="linkish"
@@ -156,7 +158,8 @@
         {/if}
         <ol start={(optimalZones?.frontier.length ?? 0) + 1}>
             {#each optimalZones?.innerSamples.slice(0, 5) as z, i}
-                <li>{z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}±{z.stddev.toFixed(2)}
+                <li>{z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}
+                    ±{z.stddev.toFixed(2)}
                     km, {z.centers.features.length} centros)
                     {#if i + optimalZones!.frontier.length !== currentlyDisplayedZoneIndex}
                         <button class="linkish"
@@ -183,6 +186,8 @@
                 tendrán un conjunto diferente de recintos y por lo tanto podría ser que otra zona sea preferible
             </li>
         </ul>
+
+        <ParetoChart pareto={optimalZones!}/>
     </details>
 
     <MapLibre
