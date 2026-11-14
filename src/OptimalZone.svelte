@@ -19,6 +19,7 @@
     import corrections from "./data/corrections.json";
     import {featureCollection, lineString, lineStrings} from "@turf/helpers";
     import bbox from "@turf/bbox";
+    import {type ParetoFrontier, recordOnFrontier} from "./pareto";
 
     const {lat, lng}: { lat: number, lng: number } = $props()
 
@@ -37,31 +38,32 @@
         zoneId: string,
         province: string, canton: string, parish: string, zone: string,
         centers: FeatureCollection<Point, VotingCenterProperties>,
-        average: number, min: number, max: number,
+        average: number, stddev: number, min: number, max: number,
+        vals: number[],
     }
-    const optimalZones = $derived(lat !== undefined ? clusterReduce(latestElection, "ID ZONA", (prevMin: OptimalZoneInfo[], cluster, zoneId) => {
-        // compute the RMS sqrt(sum(dist_i)/n) of the distances, this pulls to the nearest-ish average zone but also penalizes zones that are more "spread out" i.e. larger
-        const thisZoneMetric = Math.sqrt(1 / cluster.features.length * featureReduce(cluster, (acc, center) => acc + Math.pow(distance([lng, lat], center), 2), 0))
-        if (prevMin.length === 0 || thisZoneMetric < prevMin[prevMin.length - 1].average) {
-            const zoneToInsert = {
-                zoneId,
-                province: cluster.features[0].properties.PROVINCIA,
-                canton: cluster.features[0].properties.CANTON,
-                parish: cluster.features[0].properties.PARROQUIA,
-                zone: cluster.features[0].properties.ZONA,
-                centers: cluster,
-                average: featureReduce(cluster, (acc, center) => acc + distance([lng, lat], center) / cluster.features.length, 0),
-                min: featureReduce(cluster, (acc, center) => Math.min(acc, distance([lng, lat], center)), Infinity),
-                max: featureReduce(cluster, (acc, center) => Math.max(acc, distance([lng, lat], center)), 0),
-            }
-            return [...prevMin, zoneToInsert].toSorted((a, b) => a.average - b.average).slice(0, 5)
-        } else {
-            return prevMin
+
+    // noinspection JSVoidFunctionReturnValueUsed
+    const optimalZones = $derived(lat !== undefined ? clusterReduce(latestElection, "ID ZONA", (prevMin: ParetoFrontier<OptimalZoneInfo>, cluster, zoneId) => {
+        const average = featureReduce(cluster, (acc, center) => acc + distance([lng, lat], center) / cluster.features.length, 0)
+        const stddev = Math.sqrt(featureReduce(cluster, (acc, center) => acc + Math.pow(distance([lng, lat], center) - average, 2), 0) / cluster.features.length)
+
+        const zoneToInsert: OptimalZoneInfo = {
+            zoneId,
+            province: cluster.features[0].properties.PROVINCIA,
+            canton: cluster.features[0].properties.CANTON,
+            parish: cluster.features[0].properties.PARROQUIA,
+            zone: cluster.features[0].properties.ZONA,
+            centers: cluster,
+            average, stddev, vals: [average, stddev],
+            min: featureReduce(cluster, (acc, center) => Math.min(acc, distance([lng, lat], center)), Infinity),
+            max: featureReduce(cluster, (acc, center) => Math.max(acc, distance([lng, lat], center)), 0),
         }
-    }, []) as unknown as OptimalZoneInfo[] : undefined)
+        recordOnFrontier(prevMin, zoneToInsert)
+        return prevMin
+    }, {frontier: [], innerSamples: [], numInnerSamples: 15}) as unknown as ParetoFrontier<OptimalZoneInfo> : undefined)
     let currentlyDisplayedZoneIndex = $state<number>(0)
-    const optimalZone = $derived(optimalZones?.[0])
-    const currentlyDisplayedZone = $derived(optimalZones?.[currentlyDisplayedZoneIndex])
+    const optimalZone = $derived(optimalZones?.frontier.toSorted((a, b) => a.average - b.average)[0])
+    const currentlyDisplayedZone = $derived(optimalZones && currentlyDisplayedZoneIndex < optimalZones?.frontier.length ? optimalZones?.frontier[currentlyDisplayedZoneIndex] : optimalZones?.innerSamples[currentlyDisplayedZoneIndex - optimalZones!.frontier.length])
 
     let map = $state<maplibregl.Map>()
 
@@ -100,7 +102,7 @@
 
         // HACKITY HACKITY disable the internal _updateCamera function which is called on location updates
         // See https://stackoverflow.com/a/79790651
-        geolocateControl._updateCamera = function (position) {
+        geolocateControl._updateCamera = function (_position) {
             // do nothing
         }
     })
@@ -123,18 +125,45 @@
 <h1>El Optimizador</h1>
 
 {#if optimalZone}
-    <p>La zona óptima desde tu ubicación actual es {optimalZone.province} > {optimalZone.canton} > {optimalZone.parish} > {optimalZone.zone}
-        ({optimalZone.average.toFixed(2)} km en promedio)</p>
+    <p>La zona óptima desde tu ubicación actual es {optimalZone.province} > {optimalZone.canton} > {optimalZone.parish}
+        > {optimalZone.zone}
+        (en promedio {optimalZone.average.toFixed(2)}±{optimalZone.stddev.toFixed(2)} km de distancia)</p>
 
     <details>
         <summary>Ver alternativas</summary>
 
         <ol>
-            {#each optimalZones as z, i}
-                <li>{z.province} > {z.canton} > {z.parish} > {z.zone} ({z.average.toFixed(2)} km en
-                    promedio, {z.centers.features.length} centros)
-                    {#if i !== currentlyDisplayedZoneIndex}<a href="#"
-                                                              onclick={() => {currentlyDisplayedZoneIndex = i}}>Ver</a>{/if}
+            {#each optimalZones?.frontier as z, i}
+                <li>{z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}±{z.stddev.toFixed(2)}
+                    km, {z.centers.features.length} centros)
+                    {#if i !== currentlyDisplayedZoneIndex}
+                        <button class="linkish"
+                                onclick={() => {currentlyDisplayedZoneIndex = i}}>
+                            Ver
+                        </button>
+                    {/if}
+                </li>
+            {/each}
+        </ol>
+        {#if optimalZones?.frontier.length === 1}
+            <p>(esta es la mejor zona tanto en distancia promedio como en dispersión. A continuación algunas otras
+                zonas, aunque son peores en ambas dimensiones)
+            </p>
+        {:else}
+            <p>(todas las demás zonas del país son peores que estas, tienen mayor distancia promedio y dispersión
+                que alguna de las de arriba. A continuación algunos ejemplos)
+            </p>
+        {/if}
+        <ol start={(optimalZones?.frontier.length ?? 0) + 1}>
+            {#each optimalZones?.innerSamples.slice(0, 5) as z, i}
+                <li>{z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}±{z.stddev.toFixed(2)}
+                    km, {z.centers.features.length} centros)
+                    {#if i + optimalZones!.frontier.length !== currentlyDisplayedZoneIndex}
+                        <button class="linkish"
+                                onclick={() => {currentlyDisplayedZoneIndex = optimalZones!.frontier.length + i}}>
+                            Ver
+                        </button>
+                    {/if}
                 </li>
             {/each}
         </ol>
@@ -145,7 +174,8 @@
 
         <ul>
             <li>Porque lo dice El Optimizador&trade;</li>
-            <li>La distancia promedio a los centros de esta zona es de {optimalZone.average.toFixed(2)} km
+            <li>La distancia promedio a los centros de la zona {optimalZone.zone || optimalZone.parish} es
+                de {optimalZone.average.toFixed(2)} km
                 (entre {optimalZone.min.toFixed(1)} km y {optimalZone.max.toFixed(1)} km)
             </li>
             <li>Esta es la mínima distancia promedio entre todas las zonas del país</li>
@@ -215,7 +245,7 @@
         }}
                     hoverCursor="context-menu">
                 <Popup openOn="click" closeButton popupClass="narrow">
-                    {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> })}
+                    {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> | undefined })}
                         {@const props = data!.properties!}
                         <p>[{props["CODIGO RECINTO"]}] <b>Recinto: {props["NOMBRE RECINTO"]}</b></p>
 
@@ -232,3 +262,14 @@
 {:else}
     <p>Calculando la zona óptima...</p>
 {/if}
+
+<style>
+    button.linkish {
+        background: none;
+        border: none;
+        font-size: 1em;
+        text-decoration: underline;
+        color: blue;
+        cursor: pointer;
+    }
+</style>
