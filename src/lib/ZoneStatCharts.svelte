@@ -3,14 +3,14 @@
 
     import {init, use} from 'echarts/core'
     import {LineChart} from 'echarts/charts'
-    import {GridComponent, TooltipComponent} from 'echarts/components'
+    import {GridComponent, TooltipComponent, MarkLineComponent} from 'echarts/components'
     import {SVGRenderer} from 'echarts/renderers'
     import type {EChartsOption, SeriesOption} from "echarts";
-    import {elections, type ZoneInfo} from "../elections";
+    import {type ElectionInfo, elections, type ZoneInfo} from "../elections";
 
-    use([LineChart, GridComponent, TooltipComponent, SVGRenderer])
+    use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, SVGRenderer])
 
-    function makeSeriesOneCenter(name: string, data: number[]): SeriesOption {
+    function makeSeriesOneCenter(name: string, data: number[], isFirstSeries: boolean, activeElectionName?: string): SeriesOption {
         return {
             name,
             symbolSize: 20,
@@ -28,6 +28,21 @@
                 width: 3
             },
             data,
+            markLine: isFirstSeries && activeElectionName ? {
+                symbol: ['none', 'arrow'],
+                lineStyle: {
+                    color: 'red',
+                    width: 2,
+                },
+                data: [
+                    {name: 'Elección activa', xAxis: activeElectionName}
+                ],
+                emphasis: {
+                    lineStyle: {
+                        width: 4,
+                    },
+                }
+            } : undefined,
         }
     }
 
@@ -82,7 +97,7 @@
         return name
     }
 
-    const {zoneDataAcrossElections}: { zoneDataAcrossElections: Record<string, ZoneInfo> } = $props()
+    const {zoneDataAcrossElections, activeElection}: { zoneDataAcrossElections: Record<string, ZoneInfo>, activeElection?: ElectionInfo } = $props()
     const electionKeys = $derived(Object.entries(zoneDataAcrossElections).filter(([_, zoneInfo]) => zoneInfo.numCenters > 0).map(([electionKey, _]) => electionKey))
     const activeElections = $derived(elections.filter(e => electionKeys.includes(e.value)))
     const centerOrders = $derived.by(() => {
@@ -140,10 +155,11 @@
             min: 1,
             max: maxNumberOfCenters
         },
-        series: [...centerOrdersAcrossElections.entries()].map(([centerName, orders]) => makeSeriesOneCenter(centerName, orders)),
+        series: [...centerOrdersAcrossElections.entries()].map(([centerName, orders], i) => makeSeriesOneCenter(centerName, orders, i === 0, activeElection?.label)),
     } satisfies EChartsOption)
 </script>
 
-<div style:height={(maxNumberOfCenters <= 30 ? 50 * maxNumberOfCenters + 50 : 1600) + "px"} style="margin-block-end: 30px;">
+<div style:height={(maxNumberOfCenters <= 30 ? 50 * maxNumberOfCenters + 50 : 1600) + "px"}
+     style="margin-block-end: 30px;">
     <Chart {init} {options}/>
 </div>

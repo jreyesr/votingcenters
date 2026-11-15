@@ -258,9 +258,11 @@
     Cantón: {Object.values(zoneInfoAcrossElections)[0].canton} >
     Parroquia: {Object.values(zoneInfoAcrossElections)[0].parish}</p>
 
-<p>En la elección <b>{chosenElectionInfo.label}</b> atendió {infoInChosenElection.numVoters} electores
-    en {infoInChosenElection.numCenters}
-    recintos ({infoInChosenElection.numStations} JRVs)</p>
+{#if chosenElectionInfo && infoInChosenElection}
+    <p>En la elección <b>{chosenElectionInfo.label}</b> atendió {infoInChosenElection.numVoters} electores
+        en {infoInChosenElection.numCenters}
+        recintos ({infoInChosenElection.numStations} JRVs)</p>
+{/if}
 
 <p>Entre {rangeOfDistances.min.toFixed(1)} y {rangeOfDistances.max.toFixed(1)} km desde la posición actual. Distancia
     promedio esperada: <b>
@@ -277,7 +279,7 @@
 
 <details>
     <summary>Ver evolución de los centros</summary>
-    <ZoneStatCharts zoneDataAcrossElections={zoneInfoAcrossElections}/>
+    <ZoneStatCharts zoneDataAcrossElections={zoneInfoAcrossElections} activeElection={chosenElectionInfo}/>
 </details>
 
 <ElectionSelector bind:value={chosenElection}/>
@@ -328,7 +330,7 @@
         </GeoJSON>
     {/if}
 
-    {#if displayOrderArrows}
+    {#if displayOrderArrows && lineConnectingCentersInOrder}
         <GeoJSON data={lineConnectingCentersInOrder}>
             <LineLayer layout={{
                 'line-cap': 'round', 'line-join': 'round'
@@ -372,7 +374,7 @@
         }}
                 hoverCursor="context-menu">
             <Popup openOn="click" closeButton popupClass="narrow">
-                {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> })}
+                {#snippet children({data}: { data?: Feature<Point, VotingCenterProperties> })}
                     {@const props = data!.properties!}
                     <p>[{props["CODIGO RECINTO"]}] <b>Recinto: {props["NOMBRE RECINTO"]}</b></p>
 
