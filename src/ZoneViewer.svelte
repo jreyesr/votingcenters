@@ -287,7 +287,7 @@
         }}
         onload={() => geolocateControl?.trigger()}
         ondata={fitToLayer}
-        onmovestart={(e) => {if(e.originalEvent instanceof MouseEvent) mapExplicitlyMoved = true}}
+        onmovestart={(e) => {if(e.originalEvent instanceof MouseEvent || e.originalEvent instanceof TouchEvent) mapExplicitlyMoved = true}}
         dragRotate={false}
         images={[{id: "triangle", url: "/triangle.sdf.png", options: {sdf: true}}]}
 >
