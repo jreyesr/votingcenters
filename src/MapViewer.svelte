@@ -315,7 +315,7 @@
 
                         {#if distanceBetweenUserAndCenterDisplay !== undefined && currentUserPosition !== undefined}
                             {distanceBetweenUserAndCenterDisplay} desde tu ubicación
-                            <Link to={`/optimize/${currentUserPosition.latitude}/${currentUserPosition.longitude}`}
+                            <Link to={`/optimize/${currentUserPosition.latitude},${currentUserPosition.longitude}`}
                                   class="flat">
                                 Optimizar!
                             </Link>

@@ -1,14 +1,14 @@
 <script lang="ts">
     import {mostRecentElection, type VotingCenterProperties} from "./elections";
     import type {Feature, FeatureCollection, Point} from "geojson";
-    import {clusterEach, clusterReduce} from "@turf/clusters";
+    import {clusterReduce} from "@turf/clusters";
     import {featureReduce} from "@turf/meta";
     import {distance} from "@turf/distance";
     import {
         CircleLayer,
         FullscreenControl,
         GeoJSON,
-        GeolocateControl, LineLayer,
+        LineLayer,
         MapLibre,
         NavigationControl,
         Popup, ScaleControl
@@ -17,12 +17,14 @@
     import * as maplibregl from "maplibre-gl";
     import crc24 from "crc/crc24";
     import corrections from "./data/corrections.json";
-    import {featureCollection, lineString, lineStrings} from "@turf/helpers";
+    import {featureCollection, lineString, lineStrings, point} from "@turf/helpers";
     import bbox from "@turf/bbox";
     import {type ParetoFrontier, recordOnFrontier} from "./pareto";
     import ParetoChart from "./lib/ParetoChart.svelte";
+    import {tick} from "svelte";
 
-    const {lat, lng}: { lat: number, lng: number } = $props()
+    const {latlng}: { latlng: string } = $props()
+    const [lat, lng] = $derived(latlng?.split(",").map(x => parseFloat(x)) ?? [0, 0])
 
     const latestElection: FeatureCollection<Point, VotingCenterProperties> = (await import(`./data/${mostRecentElection.value}.json`)).default
     latestElection.features.forEach(f => {
@@ -68,6 +70,11 @@
 
     let map = $state<maplibregl.Map>()
 
+    const currentUserPosition: GeolocationCoordinates = $derived({
+        accuracy: 0, altitude: 0, altitudeAccuracy: 0, heading: 0, speed: 0, toJSON: () => ({}),
+        latitude: lat, longitude: lng,
+    } satisfies GeolocationCoordinates)
+
     function fitToLayer() {
         if (currentlyDisplayedZone && map && currentUserPosition) {
             const centersBbox = bbox(currentlyDisplayedZone.centers) as [number, number, number, number]
@@ -85,29 +92,13 @@
         }
     }
 
-
-    let geolocateControl = $state<maplibregl.GeolocateControl>()
-    let currentUserPosition = $state<GeolocationCoordinates>()
-
-    function triggerGeolocate() {
-        geolocateControl?.trigger()
-    }
-
     $effect(() => {
-        if (!geolocateControl) return;
-
-        geolocateControl.on("geolocate", (e) => {
-            currentUserPosition = e.coords
-            fitToLayer()
+        tick().then(() => {
+            if (currentUserPosition) fitToLayer()
         })
-
-        // HACKITY HACKITY disable the internal _updateCamera function which is called on location updates
-        // See https://stackoverflow.com/a/79790651
-        geolocateControl._updateCamera = function (_position) {
-            // do nothing
-        }
     })
 
+    const simulatedLocationPoint = $derived(point([lng, lat]))
     const linesToOptimalCenters = $derived(currentUserPosition && currentlyDisplayedZone
         ? featureCollection(currentlyDisplayedZone.centers.features
             .map(center => lineString([center.geometry.coordinates, [currentUserPosition!.longitude, currentUserPosition!.latitude]], {...center.properties}))
@@ -119,8 +110,6 @@
                 }
             })))
         : lineStrings([]))
-
-
 </script>
 
 <h1>El Optimizador</h1>
@@ -202,11 +191,9 @@
           sources: {},
           layers: [],
         }}
-            onload={triggerGeolocate}
             dragRotate={false}
     >
         <NavigationControl showCompass={false}/>
-        <GeolocateControl showAccuracyCircle={true} bind:control={geolocateControl}/>
         <FullscreenControl/>
         <ScaleControl/>
 
@@ -221,6 +208,16 @@
                     'line-opacity': 1,
                 }}>
             </LineLayer>
+        </GeoJSON>
+
+        <GeoJSON data={simulatedLocationPoint}>
+            <CircleLayer
+                    paint={{
+                    'circle-radius': 7.5,
+                    'circle-color': '#1da1f2',
+                    'circle-stroke-color': 'white',
+                    'circle-stroke-width': 2,
+                }}/>
         </GeoJSON>
 
         <GeoJSON id="votingCenters" data={latestElection} promoteId="CODIGO RECINTO">

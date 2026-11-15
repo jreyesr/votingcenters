@@ -271,7 +271,7 @@
         {/if}
     </b>
     {#if currentUserPosition}
-        <Link to={`/optimize/${currentUserPosition.latitude}/${currentUserPosition.longitude}`}>Optimizar!</Link>
+        <Link to={`/optimize/${currentUserPosition.latitude},${currentUserPosition.longitude}`}>Optimizar!</Link>
     {/if}
 </p>
 

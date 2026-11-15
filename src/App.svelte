@@ -26,7 +26,7 @@
                 {/if}
             {/snippet}
         </Route>
-        <Route path="/optimize/:lat/:lng" component={OptimalZone}/>
+        <Route path="/optimize/:latlng" component={OptimalZone}/>
         <Route path="/error" component={ReportError}/>
         <Route path="/about" component={About}/>
         <Route path="/privacy" component={Privacy}/>
