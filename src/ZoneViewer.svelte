@@ -125,8 +125,12 @@
     const infoInChosenElection = $derived(Object.values(zoneInfoAcrossElections).find(e => e.electionKey === chosenElection))
     const activeCentersInChosenElection = $derived(featureCollection(infoInChosenElection?.centers ?? []))
 
+    let mapExplicitlyMoved = $state(false)
+
     function fitToLayer(e: maplibregl.MapSourceDataEvent | maplibregl.MapStyleDataEvent) {
         if (e.dataType === "style" || e.sourceDataType !== "content" || e.sourceId !== "votingCenters") return
+        if (mapExplicitlyMoved) return; // don't refit if the user has expressly moved the map around, that means they want to focus on something in particular
+
         const sourceData = (e.source as maplibregl.GeoJSONSourceSpecification).data as typeof activeCentersInChosenElection
         if (sourceData.features.length > 0) {
             map!.fitBounds(bbox(sourceData) as [number, number, number, number], {
@@ -137,23 +141,8 @@
         }
     }
 
-    function onmapload() {
-        loadArrowSymbol()
-        triggerGeolocate()
-    }
-
-    function loadArrowSymbol() {
-        map!.loadImage("/triangle.sdf.png").then(img => {
-            map!.addImage('triangle', img.data, {sdf: true});
-        })
-    }
-
     let geolocateControl = $state<maplibregl.GeolocateControl>()
     let currentUserPosition = $state<GeolocationCoordinates>()
-
-    function triggerGeolocate() {
-        geolocateControl?.trigger()
-    }
 
     $effect(() => {
         if (!geolocateControl) return;
@@ -296,9 +285,11 @@
           sources: {},
           layers: [],
         }}
-        onload={onmapload}
+        onload={() => geolocateControl?.trigger()}
         ondata={fitToLayer}
+        onmovestart={(e) => {if(e.originalEvent instanceof MouseEvent) mapExplicitlyMoved = true}}
         dragRotate={false}
+        images={[{id: "triangle", url: "/triangle.sdf.png", options: {sdf: true}}]}
 >
     <NavigationControl showCompass={false}/>
     <GeolocateControl showAccuracyCircle={true} bind:control={geolocateControl}/>

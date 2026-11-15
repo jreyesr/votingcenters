@@ -29,7 +29,9 @@
             },
             data,
             markLine: isFirstSeries && activeElectionName ? {
-                symbol: ['none', 'arrow'],
+                symbol: ['none', 'square'],
+                symbolSize: 14,
+                symbolOffset: [[0, 0], [0, -7]],
                 lineStyle: {
                     color: 'red',
                     width: 2,
@@ -37,10 +39,16 @@
                 data: [
                     {name: 'Elección activa', xAxis: activeElectionName}
                 ],
+                label: {
+                    show: false
+                },
                 emphasis: {
                     lineStyle: {
                         width: 4,
                     },
+                },
+                tooltip: {
+                    formatter: "{b}\t<b>{c}</b>"
                 }
             } : undefined,
         }

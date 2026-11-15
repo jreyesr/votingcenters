@@ -112,7 +112,7 @@
         : lineStrings([]))
 </script>
 
-<h1>El Optimizador</h1>
+<h1>Die Optimierungs-Maschine Mk.1</h1>
 
 {#if optimalZone}
     <p>La zona óptima desde tu ubicación actual es {optimalZone.province} > {optimalZone.canton} > {optimalZone.parish}
