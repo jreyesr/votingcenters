@@ -144,6 +144,6 @@
     } satisfies EChartsOption)
 </script>
 
-<div style:height={(maxNumberOfCenters <= 30 ? 50 * maxNumberOfCenters : 1600) + "px"} style="margin-block-end: 30px;">
+<div style:height={(maxNumberOfCenters <= 30 ? 50 * maxNumberOfCenters + 50 : 1600) + "px"} style="margin-block-end: 30px;">
     <Chart {init} {options}/>
 </div>
