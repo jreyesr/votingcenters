@@ -12,7 +12,7 @@
         MapLibre,
         NavigationControl, GeolocateControl, FullscreenControl, ScaleControl,
         GeoJSON,
-        CircleLayer, FillLayer, LineLayer, SymbolLayer,
+        CircleLayer, FillLayer, LineLayer, SymbolLayer, HeatmapLayer,
         Popup,
         hoverStateFilter, zoomTransition,
     } from 'svelte-maplibre';
@@ -50,6 +50,7 @@
     import LoadingAnimation from "./lib/LoadingAnimation.svelte";
     import {type VotingCenterProperties, type ZoneInfo, type ZoneProperties} from "./elections";
     import ElectionSelector from "./lib/ElectionSelector.svelte";
+    import MapViewerExtraControls from "./lib/MapViewerExtraControls.svelte";
 
     // NOTE the import(...) below MUST use backticks `path/${filename}.json`, NOT "path/" + filename + ".json" or other forms of creating the import path
     // Vite does some kind of analysis of backtick dynamic imports and rewrites them to an object lookup taking into account all the files that exist in that directory
@@ -174,6 +175,16 @@
         : undefined)
 
     const centerOfFocusedZone = $derived(focusedZone ? centerOfMass(focusedZone).geometry : undefined)
+
+    let showHeatmap = $state(false)
+    $effect(() => {
+        showHeatmap; // NOTE must explicitly mention this var on every run, otherwise the first run of $effect will have map.isStyleLoaded = false, it won't access showHeatmap and won't track showHeatmap for the next time it changes
+        // See https://svelte.dev/docs/svelte/$effect#Understanding-dependencies "An effect only depends on the values that it read *the last time it ran*. This has interesting implications for effects that have conditional code."
+        if (map?.isStyleLoaded()) { // NOTE .setGlobalStateProperty needs the map's style to be fully loaded!
+            map.setGlobalStateProperty("show-heatmap", showHeatmap)
+        }
+    })
+    const heatmapSwitchTransition = {duration: 500}
 </script>
 
 <h1>Recintos electorales a través de la historia</h1>
@@ -209,6 +220,7 @@
         <ScaleControl/>
 
         <BasemapSwitcherControl/>
+        <MapViewerExtraControls bind:showHeatmap/>
 
         {#if focusedZone && focusedZone.properties["ID ZONA"] in zonesInfo}
             <Popup open
@@ -230,32 +242,46 @@
         <GeoJSON data={zonesCollection} promoteId="ID ZONA">
             <FillLayer
                     eventsIfTopMost
+                    layout={{
+                        'visibility': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 'none', 'visible'],
+                    }}
                     paint={{
-                    'fill-color': 'red',
-                    'fill-opacity': hoverStateFilter(0, 0.3),
-                }}
+                        'fill-opacity': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 0, hoverStateFilter(0, 0.3)],
+                        'fill-opacity-transition': heatmapSwitchTransition,
+                        'fill-color': 'red',
+                    }}
                     manageHoverState bind:hovered={hoveredZone}
                     onclick={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {if(!focusedZone) focusedZone = features[0]}}
                     onmouseenter={({features}: {features: Feature<Polygon, ZoneProperties>[]}) => {focusedZone = features[0]}}
             />
 
-            <LineLayer paint={{
-            'line-color': 'red',
-            'line-width': hoverStateFilter(1, 2),
-        }}/>
+            <LineLayer
+                    layout={{
+                        'visibility': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 'none', 'visible'],
+                    }}
+                    paint={{
+                        'line-opacity': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 0, 1],
+                        'line-opacity-transition': heatmapSwitchTransition,
+                        'line-color': 'red',
+                        'line-width': hoverStateFilter(1, 2),
+                }}
+            />
 
             <SymbolLayer
                     eventsIfTopMost
-                    paint={{
-                    'text-color': hoverStateFilter("#333", "black"),
-                    'text-opacity': zoomTransition(11, 0, 11.5, 1),
-                    'text-halo-color': hoverStateFilter('transparent', 'red'),
-                    'text-halo-width': 2,
-                }}
                     layout={{
-                    'text-field': ['coalesce', ['get', 'ZONA'], ['get', 'PARROQUIA']],
-                    'text-size': zoomTransition(11, 5, 13, 16)
-                }}/>
+                        'visibility': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 'none', 'visible'],
+                        'text-field': ['coalesce', ['get', 'ZONA'], ['get', 'PARROQUIA']],
+                        'text-size': zoomTransition(11, 5, 13, 16)
+                    }}
+                    paint={{
+                        'text-opacity': zoomTransition(11, 0, 11.5, ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 0, 1]),
+                        'text-opacity-transition': heatmapSwitchTransition,
+                        'text-color': hoverStateFilter("#333", "black"),
+                        'text-halo-color': hoverStateFilter('transparent', 'red'),
+                        'text-halo-width': 2,
+                    }}
+            />
         </GeoJSON>
 
         <!-- line joining the center with its popup open to the user's current geolocation -->
@@ -270,35 +296,76 @@
         </GeoJSON>
 
         <GeoJSON data={chosenElectionData as GeoJSONType} promoteId="CODIGO RECINTO">
+            <HeatmapLayer
+                    layout={{
+                        'visibility': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 'visible', 'none'],
+                    }}
+                    paint={{
+                        'heatmap-opacity': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 0.7, 0],
+                        'heatmap-opacity-transition': heatmapSwitchTransition,
+                        'heatmap-weight': [
+                            'interpolate',['linear'], ['get', 'NUMERO ELECTORES'],
+                            0, 0,
+                            50000, 1
+                        ],
+                        'heatmap-intensity': [
+                            'interpolate', ['linear'], ['zoom'],
+                            0, 1,
+                            9, 3
+                        ],
+                        /*'heatmap-color': [
+                            'interpolate', ['linear'], ['heatmap-density'],
+                            0, 'rgba(33,102,172,0)',
+                            0.2, 'rgb(103,169,207)',
+                            0.4, 'rgb(209,229,240)',
+                            0.6, 'rgb(253,219,199)',
+                            0.8, 'rgb(239,138,98)',
+                            1, 'rgb(178,24,43)'
+                        ],*/
+                        'heatmap-radius': [
+                            'interpolate', ['linear'], ['zoom'],
+                            6, 5,
+                            16, 60
+                        ],
+                    }}
+            />
+
             <CircleLayer
                     eventsIfTopMost
+                    layout={{
+                        'visibility': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 'none', 'visible'],
+                    }}
                     paint={{
-            'circle-color': [
-                "case",
-                hoveredZoneCentersFilter,
-                "red",
-                [
-                    "rgb",
-                    ["at", 0, ["get", 'HASH ZONA']],
-                    ["at", 1, ["get", 'HASH ZONA']],
-                    ["at", 2, ["get", 'HASH ZONA']],
-                ]
-            ],
-            'circle-radius': [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                10, 4,
-                13, 10,
-            ],
-            'circle-stroke-width': [
-                "interpolate",
-                ["linear"],
-                ["zoom"],
-                11, 0,
-                12, 1,
-            ],
-        }}
+                        'circle-opacity': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 0, 1],
+                        'circle-opacity-transition': heatmapSwitchTransition,
+                        'circle-stroke-opacity': ['case', ['coalesce', ['global-state', 'show-heatmap'], false], 0, 1],
+                        'circle-stroke-opacity-transition': heatmapSwitchTransition,
+                        'circle-color': [
+                            "case",
+                            hoveredZoneCentersFilter,
+                            "red",
+                            [
+                                "rgb",
+                                ["at", 0, ["get", 'HASH ZONA']],
+                                ["at", 1, ["get", 'HASH ZONA']],
+                                ["at", 2, ["get", 'HASH ZONA']],
+                            ]
+                        ],
+                        'circle-radius': [
+                            "interpolate",
+                            ["linear"],
+                            ["zoom"],
+                            10, 4,
+                            13, 10,
+                        ],
+                        'circle-stroke-width': [
+                            "interpolate",
+                            ["linear"],
+                            ["zoom"],
+                            11, 0,
+                            12, 1,
+                        ],
+                    }}
                     hoverCursor="context-menu">
                 <Popup openOn="click" closeButton popupClass="narrow" onclose={() => focusedCenter = undefined}>
                     {#snippet children({data}: { data: Feature<Point, VotingCenterProperties> | undefined })}
