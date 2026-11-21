@@ -82,7 +82,7 @@
                 }
             })
             if (hull) {
-                zones.push(buffer(hull, 200, {units: 'meters'}) as Feature<Polygon, ZoneProperties>)
+                zones.push(buffer(hull, 200, {units: 'meters', steps: 2}) as Feature<Polygon, ZoneProperties>)
             } else if (zone.features.length === 1) { // single point, just buffer it
                 const singlePoint = point(
                     zone.features[0].geometry.coordinates,
@@ -99,7 +99,10 @@
                         center: centerOfMass(zone).geometry
                     }
                 )
-                zones.push(buffer(lineAcrossPoints, 500, {units: 'meters'}) as Feature<Polygon, ZoneProperties>)
+                zones.push(buffer(lineAcrossPoints, 500, {
+                    units: 'meters',
+                    steps: 4
+                }) as Feature<Polygon, ZoneProperties>)
             }
         });
         return featureCollection(zones)
@@ -222,10 +225,6 @@
                       to={"/zone/" + [props.province.trim(), props.canton.trim(), props.parish.trim(), props.zone?.trim() ?? ""].join(";").replaceAll("/", "%2F")}>
                     Estoy en esta zona
                 </Link>
-                <!--<button onclick={() => {
-                    // focusedZone = data
-                    geolocateControl?.trigger()
-                }} class="flat">Estoy en esta zona-->
             </Popup>
         {/if}
         <GeoJSON data={zonesCollection} promoteId="ID ZONA">
@@ -296,8 +295,8 @@
                 "interpolate",
                 ["linear"],
                 ["zoom"],
-                12, 0,
-                13, 1.5,
+                11, 0,
+                12, 1,
             ],
         }}
                     hoverCursor="context-menu">
