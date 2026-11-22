@@ -1,6 +1,6 @@
 <script lang="ts">
     import {mostRecentElection, type VotingCenterProperties} from "./elections";
-    import type {Feature, FeatureCollection, Point} from "geojson";
+    import type {Feature, FeatureCollection, Point, Polygon} from "geojson";
     import {clusterReduce} from "@turf/clusters";
     import {featureReduce} from "@turf/meta";
     import {distance} from "@turf/distance";
@@ -22,6 +22,7 @@
     import {type ParetoFrontier, recordOnFrontier} from "./pareto";
     import ParetoChart from "./lib/ParetoChart.svelte";
     import {tick} from "svelte";
+    import geojsonRbush from "@turf/geojson-rbush";
 
     const {latlng}: { latlng: string } = $props()
     const [lat, lng] = $derived(latlng?.split(",").map(x => parseFloat(x)) ?? [0, 0])
@@ -36,6 +37,20 @@
         if (f.properties["CODIGO RECINTO"].toString() in corrections)
             (f.geometry as Point).coordinates = (corrections as Record<string, number[]>)[f.properties["CODIGO RECINTO"]]
     })
+
+    type CNESuggestionProperties = {
+        "CODIGO PROVINCIA": string,
+        "CODIGO CANTON": string,
+        "CODIGO PARROQUIA": string,
+        "CODIGO ZONA": string,
+        PROVINCIA: string,
+        CANTON: string,
+        PARROQUIA: string,
+        ZONA: string,
+    }
+    const cneSuggestions = (await import('./data/cne_suggestions.json')).default as unknown as FeatureCollection<Polygon, CNESuggestionProperties>
+    const cneTree = geojsonRbush<Polygon, CNESuggestionProperties>()
+    cneTree.load(cneSuggestions)
 
     type OptimalZoneInfo = {
         zoneId: string,
@@ -98,7 +113,7 @@
         })
     })
 
-    const simulatedLocationPoint = $derived(point([lng, lat]))
+    const simulatedUserLocationPoint = $derived(point([lng, lat]))
     const linesToOptimalCenters = $derived(currentUserPosition && currentlyDisplayedZone
         ? featureCollection(currentlyDisplayedZone.centers.features
             .map(center => lineString([center.geometry.coordinates, [currentUserPosition!.longitude, currentUserPosition!.latitude]], {...center.properties}))
@@ -110,6 +125,8 @@
                 }
             })))
         : lineStrings([]))
+
+    const cneSuggestedOptimalZone: typeof cneSuggestions["features"][number] | undefined = $derived(cneTree.search(simulatedUserLocationPoint).features[0])
 </script>
 
 <h1>Die Optimierungs-Maschine Mk.1</h1>
@@ -118,6 +135,13 @@
     <p>La zona óptima desde tu ubicación actual es {optimalZone.province} > {optimalZone.canton} > {optimalZone.parish}
         > {optimalZone.zone}
         (en promedio {optimalZone.average.toFixed(2)}±{optimalZone.stddev.toFixed(2)} km de distancia)</p>
+    {#if cneSuggestedOptimalZone}<p>El CNE opina que la zona óptima desde tu ubicación actual
+        es {cneSuggestedOptimalZone.properties.PROVINCIA}
+        > {cneSuggestedOptimalZone.properties.CANTON} > {cneSuggestedOptimalZone.properties.PARROQUIA}
+        > {cneSuggestedOptimalZone.properties.ZONA}.</p>
+    {:else}
+        <p>El CNE no conoce una zona óptima desde tu ubicación actual.</p>
+    {/if}
 
     <details>
         <summary>Ver alternativas</summary>
@@ -213,7 +237,7 @@
             </LineLayer>
         </GeoJSON>
 
-        <GeoJSON data={simulatedLocationPoint}>
+        <GeoJSON data={simulatedUserLocationPoint}>
             <CircleLayer
                     paint={{
                     'circle-radius': 7.5,

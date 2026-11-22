@@ -36,13 +36,20 @@
     </p>
 
     <p>
+        Los datos usados para la "sugerencia del CNE" en la página de la zona óptima son los que se usan en la app del
+        CNE para cambio de domicilio electoral y se pueden descargar en este link: <a
+            href="https://backend-apps.cne.gob.ec/repository/api/File/Get?file=camdom/shapes/ZONAS_ELECTORALES_2024_SIM.zip">https://backend-apps.cne.gob.ec/repository/api/File/Get?file=camdom/shapes/ZONAS_ELECTORALES_2024_SIM.zip</a>
+    </p>
+
+    <p>
         Esta página contiene código basado en:
     </p>
     <ul>
         <li><a href="https://codepen.io/brandonmcconnell/pen/Zqjdmg" target="_blank" rel="external">https://codepen.io/brandonmcconnell/pen/Zqjdmg</a>
             para el selector de proceso electoral
         </li>
-        <li><a href="https://tobiasahlin.com/spinkit/" target="_blank" rel="external">https://tobiasahlin.com/spinkit/</a> para la animación cuando el
+        <li><a href="https://tobiasahlin.com/spinkit/" target="_blank"
+               rel="external">https://tobiasahlin.com/spinkit/</a> para la animación cuando el
             mapa está cargando
         </li>
     </ul>

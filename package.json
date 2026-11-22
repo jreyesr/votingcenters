@@ -29,6 +29,7 @@
     "@turf/clusters": "^7.4.0",
     "@turf/convex": "^7.4.0",
     "@turf/distance": "^7.4.0",
+    "@turf/geojson-rbush": "^7.4.0",
     "@turf/helpers": "^7.4.0",
     "@turf/meta": "^7.4.0",
     "buffer": "^6.0.3",
