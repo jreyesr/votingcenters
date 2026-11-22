@@ -124,7 +124,9 @@
 
         <ol>
             {#each optimalZones?.frontier as z, i}
-                <li>{z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}
+                <li class:chosen={i === currentlyDisplayedZoneIndex}>
+                    {z.province} > {z.canton} > {z.parish}
+                    > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}
                     ±{z.stddev.toFixed(2)}
                     km, {z.centers.features.length} centros)
                     {#if i !== currentlyDisplayedZoneIndex}
@@ -147,7 +149,8 @@
         {/if}
         <ol start={(optimalZones?.frontier.length ?? 0) + 1}>
             {#each optimalZones?.innerSamples.slice(0, 5) as z, i}
-                <li>{z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}
+                <li class:chosen={i + optimalZones!.frontier.length === currentlyDisplayedZoneIndex}>
+                    {z.province} > {z.canton} > {z.parish} > {z.zone || "(zona sin nombre)"} ({z.average.toFixed(2)}
                     ±{z.stddev.toFixed(2)}
                     km, {z.centers.features.length} centros)
                     {#if i + optimalZones!.frontier.length !== currentlyDisplayedZoneIndex}
@@ -273,5 +276,9 @@
         text-decoration: underline;
         color: blue;
         cursor: pointer;
+    }
+
+    li.chosen {
+        text-decoration: underline;
     }
 </style>
