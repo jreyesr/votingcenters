@@ -52,6 +52,13 @@ export const elections: ElectionInfo[] = [
     },
     {value: "2017_pres", label: "Presidenciales 2017", date: "2017-02-19"},
     {
+        value: "2018_consulta",
+        label: "Consulta 2018",
+        disabled: true,
+        tooltipRemark: "El distributivo de esta elección no incluye información geográfica ni una forma de identificar los centros",
+        date: "2018-02-04"
+    },
+    {
         value: "2019_alcaldes",
         label: "Alcaldes 2019",
         disabled: true,
