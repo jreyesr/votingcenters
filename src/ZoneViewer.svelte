@@ -116,7 +116,7 @@
 
     const zoneInfoAcrossElectionsPromise = $derived(Promise.all(activeElections.map(e => zoneInfoInElection(e, zonePath))))
     const zoneInfoAcrossElections = $derived(Object.fromEntries(
-        (await zoneInfoAcrossElectionsPromise).filter(x => x !== undefined).map((zoneCenters, i) => ([activeElections[i].value, zoneCenters]))))
+        (await zoneInfoAcrossElectionsPromise).filter(x => x !== undefined).map(zoneInfo => ([zoneInfo.electionKey, zoneInfo]))))
     const firstAppearanceKey = $derived(Object.entries(zoneInfoAcrossElections).find(([_, e]) => e.numCenters > 0)![0])
     const firstAppearance = $derived(elections.find(e => e.value === firstAppearanceKey)!)
 
